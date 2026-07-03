@@ -1,0 +1,2673 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hong Decor - Contas a Pagar</title>
+    
+    <!-- Bibliotecas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics-compat.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+        body { background: #f5f6fa; color: #2d3436; font-size: 13px; }
+
+        .header {
+            background: #2c3e50;
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header h1 { color: #ecf0f1; font-size: 16px; font-weight: 400; }
+        .header h1 span { color: #e74c3c; font-weight: 600; }
+        .header-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+        .header-status { display: flex; align-items: center; gap: 8px; color: #ecf0f1; font-size: 10px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .status-dot.online { background: #27ae60; }
+        .status-dot.offline { background: #e74c3c; }
+
+        .btn {
+            padding: 4px 10px;
+            border: none;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-pdf { background: #27ae60; color: #fff; }
+        .btn-pdf:hover { background: #219a52; }
+        .btn-excel { background: #217346; color: #fff; }
+        .btn-excel:hover { background: #1a5c38; }
+        .btn-export { background: #2980b9; color: #fff; }
+        .btn-export:hover { background: #2471a3; }
+        .btn-import { background: #8e44ad; color: #fff; }
+        .btn-import:hover { background: #7d3c98; }
+        .btn-sync { background: #f39c12; color: #fff; }
+        .btn-sync:hover { background: #d68910; }
+        .btn-sync.syncing { background: #95a5a6; cursor: not-allowed; }
+        .btn-header { background: #e74c3c; color: #fff; }
+        .btn-header:hover { background: #c0392b; }
+        .btn-primary { background: #e74c3c; color: #fff; }
+        .btn-primary:hover { background: #c0392b; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-success:hover { background: #219a52; }
+        .btn-danger { background: #e74c3c; color: #fff; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-warning { background: #f39c12; color: #fff; }
+        .btn-warning:hover { background: #d68910; }
+        .btn-secondary { background: #95a5a6; color: #fff; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-sm { padding: 2px 6px; font-size: 9px; }
+        .btn-xs { padding: 1px 5px; font-size: 8px; }
+
+        .nav-tabs {
+            display: flex;
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+            padding: 0 12px;
+            position: sticky;
+            top: 44px;
+            z-index: 99;
+            flex-wrap: wrap;
+        }
+        .nav-tab {
+            padding: 6px 14px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 11px;
+            color: #7f8c8d;
+            border-bottom: 3px solid transparent;
+            transition: 0.2s;
+        }
+        .nav-tab:hover { color: #2c3e50; }
+        .nav-tab.active { color: #e74c3c; border-bottom-color: #e74c3c; }
+        .nav-tab .badge {
+            background: #e74c3c;
+            color: #fff;
+            border-radius: 50%;
+            padding: 1px 5px;
+            font-size: 8px;
+            margin-left: 3px;
+        }
+
+        .content { max-width: 1400px; margin: 0 auto; padding: 10px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .card {
+            background: #fff;
+            padding: 8px 10px;
+            border-radius: 3px;
+            border-left: 3px solid #bdc3c7;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .card:hover { box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+        .card-title { font-size: 8px; text-transform: uppercase; color: #95a5a6; }
+        .card-value { font-size: 16px; font-weight: 700; color: #2c3e50; }
+        .card-value.danger { color: #e74c3c; }
+        .card-value.warning { color: #f39c12; }
+        .card-value.success { color: #27ae60; }
+        .card-value.info { color: #2980b9; }
+        .card-sub { font-size: 8px; color: #95a5a6; }
+
+        .table-container {
+            background: #fff;
+            border-radius: 3px;
+            padding: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            overflow-x: auto;
+            margin-bottom: 10px;
+        }
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .table-header h2 { font-size: 13px; font-weight: 600; color: #2c3e50; }
+        .table-actions { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        th {
+            background: #f8f9fa;
+            padding: 3px 5px;
+            text-align: left;
+            font-size: 8px;
+            text-transform: uppercase;
+            color: #7f8c8d;
+            font-weight: 700;
+            border-bottom: 2px solid #ecf0f1;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        th:hover { color: #2c3e50; }
+        td { padding: 3px 5px; border-bottom: 1px solid #ecf0f1; vertical-align: middle; }
+        tbody tr:nth-child(even) { background: #fafbfc; }
+        tbody tr:hover { background: #eef1f5; }
+        .highlight-row { background: #fde8e8 !important; }
+        .highlight-row:hover { background: #fcd5d5 !important; }
+        .checkbox-col { width: 20px; text-align: center; }
+        .checkbox-col input[type="checkbox"] { cursor: pointer; }
+
+        .status-badge {
+            padding: 1px 5px;
+            border-radius: 8px;
+            font-size: 8px;
+            font-weight: 600;
+            display: inline-block;
+            white-space: nowrap;
+        }
+        .status-pago { background: #d5f5e3; color: #1a7a42; }
+        .status-pendente { background: #fdebd0; color: #b9770e; }
+        .status-vencido { background: #fadbd8; color: #922b21; }
+        .status-hoje { background: #fcf3cf; color: #9a7d0a; }
+        .status-ativo { background: #d5f5e3; color: #1a7a42; }
+        .status-inativo { background: #fadbd8; color: #922b21; }
+
+        .tag {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 6px;
+            font-size: 7px;
+            font-weight: 600;
+            white-space: nowrap;
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+        .tag-show { background: #fef9e7; color: #7d6608; }
+        .tag-com { background: #fdedec; color: #922b21; }
+        .tag-adm { background: #d6eaf8; color: #1a5276; }
+        .tag-dir { background: #e8daef; color: #6c3483; }
+        .tag-ops { background: #d5f5e3; color: #1a7a42; }
+
+        .actions { display: flex; gap: 2px; flex-wrap: wrap; }
+
+        .filters {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+            align-items: center;
+        }
+        .filters select, .filters input {
+            padding: 2px 6px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 10px;
+            background: #fff;
+        }
+        .filters input[type="date"] { width: 100px; }
+        .search-box {
+            display: flex;
+            gap: 2px;
+            flex: 1;
+            min-width: 120px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 2px 6px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 10px;
+            min-width: 80px;
+        }
+        .search-box input:focus { border-color: #e74c3c; outline: none; }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: #fff;
+            border-radius: 5px;
+            padding: 16px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal h2 { font-size: 15px; font-weight: 600; color: #2c3e50; margin-bottom: 10px; }
+        .modal .close {
+            float: right;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #95a5a6;
+        }
+        .modal .close:hover { color: #2c3e50; }
+
+        .form-group { margin-bottom: 8px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 2px;
+            font-weight: 600;
+            font-size: 10px;
+            color: #555;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 4px 7px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 11px;
+            background: #fff;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            border-color: #e74c3c;
+            outline: none;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 30px;
+            font-family: inherit;
+            font-size: 10px;
+        }
+        .form-group select:disabled {
+            background: #f5f6fa;
+            color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .modal-actions { display: flex; gap: 5px; margin-top: 10px; justify-content: flex-end; }
+
+        .info-box {
+            background: #f8f9fa;
+            padding: 5px 8px;
+            border-radius: 3px;
+            border-left: 3px solid #e74c3c;
+            margin-top: 4px;
+            font-size: 10px;
+        }
+        .info-box .value { font-weight: 600; color: #2c3e50; }
+
+        .alert-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+        .alert-item {
+            background: #fff;
+            padding: 4px 8px;
+            border-radius: 3px;
+            border-left: 3px solid #f39c12;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 3px;
+            font-size: 10px;
+        }
+        .alert-item.urgent { border-left-color: #e74c3c; background: #fdf2f2; }
+        .alert-item .alert-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .alert-item .alert-value { font-weight: 700; }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 2px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .pagination button {
+            padding: 2px 7px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 10px;
+            transition: 0.2s;
+        }
+        .pagination button:hover { background: #f0f0f0; }
+        .pagination button.active { background: #e74c3c; color: #fff; border-color: #e74c3c; }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .toast-container {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .toast {
+            padding: 6px 14px;
+            border-radius: 3px;
+            color: #fff;
+            font-weight: 500;
+            font-size: 11px;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+            min-width: 160px;
+            max-width: 300px;
+        }
+        .toast-success { background: #27ae60; }
+        .toast-error { background: #e74c3c; }
+        .toast-warning { background: #f39c12; }
+        .toast-info { background: #2980b9; }
+        @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        .empty-state { text-align: center; padding: 16px; color: #95a5a6; font-size: 11px; }
+        .empty-state .icon { font-size: 20px; margin-bottom: 3px; }
+        .grafico-container { padding: 4px 0; }
+        .mt-10 { margin-top: 6px; }
+        .mb-10 { margin-bottom: 6px; }
+        .hidden { display: none !important; }
+        .info-paginas { text-align: center; font-size: 9px; color: #95a5a6; margin-top: 3px; }
+        .select-all-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            padding: 3px 0;
+            font-size: 10px;
+            color: #555;
+        }
+        .select-all-row input[type="checkbox"] { cursor: pointer; }
+
+        .parcela-info {
+            font-size: 9px;
+            color: #7f8c8d;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            .header { flex-direction: column; text-align: center; padding: 6px; }
+            .header-actions { justify-content: center; }
+            .header-status { justify-content: center; }
+            .nav-tabs { overflow-x: auto; padding: 0 6px; gap: 2px; flex-wrap: nowrap; }
+            .nav-tab { padding: 5px 10px; font-size: 10px; white-space: nowrap; }
+            .cards-grid { grid-template-columns: repeat(2, 1fr); gap: 4px; }
+            .card-value { font-size: 14px; }
+            .form-row { grid-template-columns: 1fr; }
+            .form-row-3 { grid-template-columns: 1fr; }
+            .modal { padding: 10px; margin: 6px; }
+            .filters { flex-direction: column; }
+            .filters input, .filters select { width: 100%; }
+            .search-box { width: 100%; }
+            .table-header { flex-direction: column; align-items: stretch; }
+            .toast-container { left: 6px; right: 6px; bottom: 6px; }
+            .toast { min-width: auto; }
+            .table-actions { flex-wrap: wrap; }
+        }
+        @media (max-width: 480px) {
+            .cards-grid { grid-template-columns: 1fr 1fr; gap: 3px; }
+            .card { padding: 5px 6px; }
+            .card-value { font-size: 12px; }
+            .card-title { font-size: 7px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h1>Hong <span>Decor</span> - Contas a Pagar</h1>
+        <div class="header-status">
+            <span class="status-dot online" id="statusDot"></span>
+            <span id="statusText">Online</span>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-sync" id="btnSync" onclick="sincronizarFirebase()">🔄 Sincronizar</button>
+            <button class="btn btn-pdf" onclick="gerarPDF()">PDF</button>
+            <button class="btn btn-excel" onclick="gerarExcel()">Excel</button>
+            <button class="btn btn-export" onclick="exportarDados()">Exportar</button>
+            <button class="btn btn-import" onclick="document.getElementById('inputImportar').click()">Importar</button>
+            <input type="file" id="inputImportar" accept=".json" style="display:none" onchange="importarDados(event)">
+            <button class="btn btn-header" onclick="abrirModalCusto()">+ Custo</button>
+            <button class="btn btn-header" onclick="abrirModalSaida()">+ Saída</button>
+        </div>
+    </header>
+
+    <nav class="nav-tabs" id="navTabs">
+        <div class="nav-tab active" data-tab="resumo">Resumo <span class="badge" id="alertBadge">0</span></div>
+        <div class="nav-tab" data-tab="fixos">Custos Fixos</div>
+        <div class="nav-tab" data-tab="saidas">Saídas <span class="badge" id="pendenteBadge">0</span></div>
+        <div class="nav-tab" data-tab="comparativo">Comparativo</div>
+    </nav>
+
+    <div class="content">
+
+        <div class="tab-content active" id="tabResumo">
+            <div class="cards-grid">
+                <div class="card" onclick="aplicarFiltroStatus('vencido')" style="border-left-color:#e74c3c;">
+                    <div class="card-title">Vencidos Hoje</div>
+                    <div class="card-value danger" id="vencidosHoje">R$ 0,00</div>
+                    <div class="card-sub" id="qtdVencidosHoje">0 conta(s)</div>
+                </div>
+                <div class="card" onclick="aplicarFiltroStatus('pendente')" style="border-left-color:#f39c12;">
+                    <div class="card-title">Vencem em 3 Dias</div>
+                    <div class="card-value warning" id="vencem3Dias">R$ 0,00</div>
+                    <div class="card-sub" id="qtdVencem3Dias">0 conta(s)</div>
+                </div>
+                <div class="card" onclick="aplicarFiltroStatus('pendente')" style="border-left-color:#2980b9;">
+                    <div class="card-title">Vencem Esta Semana</div>
+                    <div class="card-value info" id="vencemSemana">R$ 0,00</div>
+                    <div class="card-sub" id="qtdVencemSemana">0 conta(s)</div>
+                </div>
+                <div class="card" onclick="aplicarFiltroStatus('pago')" style="border-left-color:#27ae60;">
+                    <div class="card-title">Total Pago no Mês</div>
+                    <div class="card-value success" id="totalPagoMes">R$ 0,00</div>
+                    <div class="card-sub" id="qtdPagoMes">0 conta(s)</div>
+                </div>
+                <div class="card" style="border-left-color:#2c3e50;">
+                    <div class="card-title">Previsão do Mês</div>
+                    <div class="card-value" id="previsaoMes">R$ 0,00</div>
+                    <div class="card-sub">Custos Fixos + Pendentes</div>
+                </div>
+                <div class="card" style="border-left-color:#7f8c8d;">
+                    <div class="card-title">Total de Contas</div>
+                    <div class="card-value" id="totalContas">0</div>
+                    <div class="card-sub" id="resumoStatusContas">Pagas: 0 | Pendentes: 0</div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header"><h2>Alertas de Vencimento</h2><span style="font-size:9px;color:#95a5a6;">Próximos 7 dias</span></div>
+                <div id="alertasLista" class="alert-list"></div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header"><h2>Previsão 30 Dias</h2></div>
+                <div id="graficoPrevisao" class="grafico-container"></div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tabFixos">
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>Custos Fixos</h2>
+                    <button class="btn btn-primary" onclick="abrirModalCusto()">+ Adicionar</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="ordenarCustos('tipo')">Tipo</th>
+                            <th onclick="ordenarCustos('valor')">Valor</th>
+                            <th onclick="ordenarCustos('dia')">Dia Venc.</th>
+                            <th>Categoria</th>
+                            <th>Centro</th>
+                            <th>Status</th>
+                            <th>Situação Mês</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaFixos"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tabSaidas">
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>Saídas / Contas a Pagar</h2>
+                    <div class="table-actions">
+                        <button class="btn btn-danger btn-sm" id="btnExcluirSelecionados" onclick="excluirSelecionados()" style="display:none;">Excluir Selecionados</button>
+                        <button class="btn btn-primary" onclick="abrirModalSaida()">+ Adicionar</button>
+                    </div>
+                </div>
+
+                <div class="filters">
+                    <div class="search-box">
+                        <input type="text" id="buscaTexto" placeholder="Buscar..." oninput="renderizarSaidas()">
+                        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('buscaTexto').value='';renderizarSaidas()">X</button>
+                    </div>
+                    <select id="filtroStatusSaida" onchange="renderizarSaidas()">
+                        <option value="todos">Todos</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="pago">Pagos</option>
+                        <option value="vencido">Vencidos</option>
+                    </select>
+                    <select id="filtroFormaPagamento" onchange="renderizarSaidas()">
+                        <option value="todas">Todas Formas</option>
+                        <option value="PIX">PIX</option>
+                        <option value="Boleto">Boleto</option>
+                        <option value="Cartão de Crédito">Cartão Crédito</option>
+                        <option value="Cartão de Débito">Cartão Débito</option>
+                        <option value="Transferência">Transferência</option>
+                        <option value="Dinheiro">Dinheiro</option>
+                        <option value="Cheque">Cheque</option>
+                    </select>
+                    <select id="filtroCategoriaSaida" onchange="renderizarSaidas()">
+                        <option value="todas">Todas Categorias</option>
+                    </select>
+                    <select id="filtroCentroCusto" onchange="renderizarSaidas()">
+                        <option value="todos">Todos Centros</option>
+                        <option value="ShowRoom">ShowRoom</option>
+                        <option value="Comercial">Comercial</option>
+                        <option value="Administrativo">Administrativo</option>
+                        <option value="Diretoria">Diretoria</option>
+                        <option value="Operações">Operações</option>
+                    </select>
+                    <div>
+                        <input type="date" id="filtroDataInicio" onchange="renderizarSaidas()" placeholder="Início">
+                        <input type="date" id="filtroDataFim" onchange="renderizarSaidas()" placeholder="Fim">
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="limparFiltrosSaida()">Limpar</button>
+                </div>
+
+                <div class="select-all-row">
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                    <label for="selectAll">Selecionar todos</label>
+                    <span style="font-size:9px;color:#95a5a6;margin-left:6px;" id="contadorSelecionados">0 selecionados</span>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="checkbox-col"></th>
+                            <th onclick="ordenarSaidas('dataLancamento')">Lançamento</th>
+                            <th onclick="ordenarSaidas('vencimento')">Vencimento</th>
+                            <th onclick="ordenarSaidas('descricao')">Descrição</th>
+                            <th onclick="ordenarSaidas('valor')">Valor</th>
+                            <th>Forma</th>
+                            <th>Categoria</th>
+                            <th>Centro</th>
+                            <th>Status</th>
+                            <th>Parcelas</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaSaidas"></tbody>
+                </table>
+
+                <div class="pagination" id="paginacaoSaidas"></div>
+                <div class="info-paginas" id="infoPaginas"></div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tabComparativo">
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>Comparativo Mensal</h2>
+                    <select id="selectAnoComparativo" onchange="renderizarComparativo()">
+                        <option value="2024">2024</option>
+                        <option value="2025">2025</option>
+                        <option value="2026" selected>2026</option>
+                    </select>
+                </div>
+                <div id="graficoComparativo" class="grafico-container"></div>
+                <div id="tabelaComparativo" style="margin-top:10px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- MODAL: CUSTO FIXO -->
+    <div class="modal-overlay" id="modalCusto">
+        <div class="modal">
+            <button class="close" onclick="fecharModal('modalCusto')">&times;</button>
+            <h2 id="modalCustoTitle">Novo Custo Fixo</h2>
+            <form id="formCusto" onsubmit="salvarCusto(event)">
+                <input type="hidden" id="custoId">
+                <div class="form-group">
+                    <label>Tipo *</label>
+                    <select id="custoTipo" required onchange="atualizarCategoriaPorTipo()">
+                        <option value="">Selecione...</option>
+                        <option value="Aluguel">Aluguel</option>
+                        <option value="Condomínio">Condomínio</option>
+                        <option value="IPTU">IPTU</option>
+                        <option value="Segurança">Segurança</option>
+                        <option value="Seguro Estoque">Seguro Estoque</option>
+                        <option value="Salários Base">Salários Base</option>
+                        <option value="Encargos Sociais">Encargos Sociais</option>
+                        <option value="Pró-labore">Pró-labore</option>
+                        <option value="Internet">Internet</option>
+                        <option value="Telefone">Telefone</option>
+                        <option value="ERP">ERP</option>
+                        <option value="Contador">Contador</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="IPVA">IPVA</option>
+                        <option value="Seguro Veículo">Seguro Veículo</option>
+                        <option value="Manutenção Veículo">Manutenção Veículo</option>
+                        <option value="Mostruários">Mostruários</option>
+                        <option value="Limpeza">Limpeza</option>
+                        <option value="Ar-condicionado">Ar-condicionado</option>
+                        <option value="Cesta de Serviços">Cesta de Serviços</option>
+                        <option value="Maquininhas">Maquininhas</option>
+                        <option value="Outros">Outros (Personalizado)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="grupoOutroTipo" style="display:none;">
+                    <label>Digite o Tipo *</label>
+                    <input type="text" id="custoOutroTipo" placeholder="Ex: Manutenção Geral">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Valor (R$) *</label>
+                        <input type="number" id="custoValor" required step="0.01" min="0" placeholder="0,00">
+                    </div>
+                    <div class="form-group">
+                        <label>Dia Vencimento *</label>
+                        <input type="number" id="custoDia" required min="1" max="31" placeholder="Ex: 5">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select id="custoCategoria" required>
+                        <option value="">Selecione...</option>
+                        <option value="Infraestrutura e Showroom">Infraestrutura e Showroom</option>
+                        <option value="Pessoal e Vendas">Pessoal e Vendas</option>
+                        <option value="Tecnologia">Tecnologia</option>
+                        <option value="Serviços Profissionais">Serviços Profissionais</option>
+                        <option value="Logística e Instalação">Logística e Instalação</option>
+                        <option value="Manutenção do Espaço">Manutenção do Espaço</option>
+                        <option value="Custos Financeiros">Custos Financeiros</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Centro de Custo</label>
+                    <select id="custoCentroCusto" required>
+                        <option value="">Selecione...</option>
+                        <option value="ShowRoom">ShowRoom</option>
+                        <option value="Comercial">Comercial</option>
+                        <option value="Administrativo">Administrativo</option>
+                        <option value="Diretoria">Diretoria</option>
+                        <option value="Operações">Operações</option>
+                    </select>
+                </div>
+                <div id="custoInfo" class="info-box hidden">
+                    <span class="value" id="custoInfoText">-</span>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modalCusto')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: SAÍDA -->
+    <div class="modal-overlay" id="modalSaida">
+        <div class="modal">
+            <button class="close" onclick="fecharModal('modalSaida')">&times;</button>
+            <h2 id="modalSaidaTitle">Nova Saída</h2>
+            <form id="formSaida" onsubmit="salvarSaida(event)">
+                <input type="hidden" id="saidaId">
+                <div class="form-group">
+                    <label>Descrição *</label>
+                    <input type="text" id="saidaDescricao" required placeholder="Ex: Fornecedor X - NF 123">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Data Lançamento *</label>
+                        <input type="date" id="saidaDataLancamento" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Data Vencimento *</label>
+                        <input type="date" id="saidaVencimento" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Valor (R$) *</label>
+                        <input type="number" id="saidaValor" required step="0.01" min="0" placeholder="0,00">
+                    </div>
+                    <div class="form-group">
+                        <label>Forma Pagamento *</label>
+                        <select id="saidaFormaPagamento" required>
+                            <option value="PIX">PIX</option>
+                            <option value="Boleto">Boleto</option>
+                            <option value="Cartão de Crédito">Cartão de Crédito</option>
+                            <option value="Cartão de Débito">Cartão de Débito</option>
+                            <option value="Transferência">Transferência</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                            <option value="Cheque">Cheque</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoria *</label>
+                        <select id="saidaCategoria" required>
+                            <option value="Infraestrutura e Showroom">Infraestrutura e Showroom</option>
+                            <option value="Pessoal e Vendas">Pessoal e Vendas</option>
+                            <option value="Tecnologia">Tecnologia</option>
+                            <option value="Serviços Profissionais">Serviços Profissionais</option>
+                            <option value="Logística e Instalação">Logística e Instalação</option>
+                            <option value="Manutenção do Espaço">Manutenção do Espaço</option>
+                            <option value="Custos Financeiros">Custos Financeiros</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Centro de Custo *</label>
+                        <select id="saidaCentroCusto" required>
+                            <option value="ShowRoom">ShowRoom</option>
+                            <option value="Comercial">Comercial</option>
+                            <option value="Administrativo">Administrativo</option>
+                            <option value="Diretoria">Diretoria</option>
+                            <option value="Operações">Operações</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Observações</label>
+                    <textarea id="saidaObservacoes" placeholder="Informações adicionais..."></textarea>
+                </div>
+                
+                <!-- PARCELAMENTO -->
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label>Parcelas</label>
+                        <select id="saidaParcelas" onchange="calcularParcelas()">
+                            <option value="1">1x (À vista)</option>
+                            <option value="2">2x</option>
+                            <option value="3">3x</option>
+                            <option value="4">4x</option>
+                            <option value="5">5x</option>
+                            <option value="6">6x</option>
+                            <option value="7">7x</option>
+                            <option value="8">8x</option>
+                            <option value="9">9x</option>
+                            <option value="10">10x</option>
+                            <option value="11">11x</option>
+                            <option value="12">12x</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Valor por Parcela</label>
+                        <input type="text" id="saidaValorParcela" readonly style="background:#f8f9fa;font-weight:600;">
+                    </div>
+                    <div class="form-group">
+                        <label>Parcela Atual</label>
+                        <input type="number" id="saidaParcelaAtual" value="1" min="1" max="12" style="width:100%;">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="saidaStatus" onchange="toggleDataPagamento()">
+                        <option value="pendente">Pendente</option>
+                        <option value="pago">Pago</option>
+                    </select>
+                </div>
+                <div class="form-group" id="grupoDataPagamento" style="display:none;">
+                    <label>Data Pagamento</label>
+                    <input type="date" id="saidaDataPagamento">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="fecharModal('modalSaida')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIRMAR PAGAMENTO -->
+    <div class="modal-overlay" id="modalConfirmarPagamento">
+        <div class="modal">
+            <button class="close" onclick="fecharModal('modalConfirmarPagamento')">&times;</button>
+            <h2>Confirmar Pagamento</h2>
+            <p style="margin:6px 0;color:#555;font-size:11px;">Deseja marcar esta conta como paga?</p>
+            <div style="background:#f8f9fa;padding:8px;border-radius:3px;margin-bottom:8px;font-size:11px;">
+                <p><strong>Descrição:</strong> <span id="confirmDescricao"></span></p>
+                <p><strong>Valor:</strong> <span id="confirmValor"></span></p>
+                <p><strong>Vencimento:</strong> <span id="confirmVencimento"></span></p>
+                <p><strong>Forma:</strong> <span id="confirmFormaPagamento"></span></p>
+                <p><strong>Parcelas:</strong> <span id="confirmParcelas"></span></p>
+            </div>
+            <div class="form-group">
+                <label>Data Pagamento *</label>
+                <input type="date" id="confirmDataPagamento" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="fecharModal('modalConfirmarPagamento')">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="confirmarPagamento()">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // ===== FIREBASE CONFIGURAÇÃO =====
+        // ============================================================
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBoclxClbVbQzISJ452lVbscbVdOQU4nxU",
+            authDomain: "hong-dfdd1.firebaseapp.com",
+            projectId: "hong-dfdd1",
+            storageBucket: "hong-dfdd1.firebasestorage.app",
+            messagingSenderId: "788640565860",
+            appId: "1:788640565860:web:06a20e85d9ce4c3727ad71",
+            measurementId: "G-LMPKNE751S"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ============================================================
+        // ===== CONFIGURAÇÕES =====
+        // ============================================================
+
+        const ITENS_POR_PAGINA = 25;
+
+        const CENTRO_CUSTO_LABELS = {
+            'ShowRoom': 'ShowRoom',
+            'Comercial': 'Comercial',
+            'Administrativo': 'Admin.',
+            'Diretoria': 'Diretoria',
+            'Operações': 'Operações'
+        };
+
+        const CENTRO_CUSTO_TAGS = {
+            'ShowRoom': 'tag-show',
+            'Comercial': 'tag-com',
+            'Administrativo': 'tag-adm',
+            'Diretoria': 'tag-dir',
+            'Operações': 'tag-ops'
+        };
+
+        const MAPA_CUSTOS_FIXOS = {
+            'Aluguel': { categoria: 'Infraestrutura e Showroom', centro: 'ShowRoom' },
+            'Condomínio': { categoria: 'Infraestrutura e Showroom', centro: 'ShowRoom' },
+            'IPTU': { categoria: 'Infraestrutura e Showroom', centro: 'ShowRoom' },
+            'Segurança': { categoria: 'Infraestrutura e Showroom', centro: 'Operações' },
+            'Seguro Estoque': { categoria: 'Infraestrutura e Showroom', centro: 'Operações' },
+            'Salários Base': { categoria: 'Pessoal e Vendas', centro: 'Administrativo' },
+            'Encargos Sociais': { categoria: 'Pessoal e Vendas', centro: 'Administrativo' },
+            'Pró-labore': { categoria: 'Pessoal e Vendas', centro: 'Diretoria' },
+            'Internet': { categoria: 'Tecnologia', centro: 'Operações' },
+            'Telefone': { categoria: 'Tecnologia', centro: 'Operações' },
+            'ERP': { categoria: 'Tecnologia', centro: 'Administrativo' },
+            'Contador': { categoria: 'Serviços Profissionais', centro: 'Administrativo' },
+            'Marketing': { categoria: 'Serviços Profissionais', centro: 'Comercial' },
+            'IPVA': { categoria: 'Logística e Instalação', centro: 'Operações' },
+            'Seguro Veículo': { categoria: 'Logística e Instalação', centro: 'Operações' },
+            'Manutenção Veículo': { categoria: 'Logística e Instalação', centro: 'Operações' },
+            'Mostruários': { categoria: 'Logística e Instalação', centro: 'Comercial' },
+            'Limpeza': { categoria: 'Manutenção do Espaço', centro: 'ShowRoom' },
+            'Ar-condicionado': { categoria: 'Manutenção do Espaço', centro: 'Operações' },
+            'Cesta de Serviços': { categoria: 'Custos Financeiros', centro: 'Administrativo' },
+            'Maquininhas': { categoria: 'Custos Financeiros', centro: 'Comercial' },
+            'Outros': { categoria: 'Outros', centro: 'Operações' }
+        };
+
+        // ============================================================
+        // ===== TOAST =====
+        // ============================================================
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const t = document.createElement('div');
+            t.className = `toast toast-${type}`;
+            t.textContent = msg;
+            container.appendChild(t);
+            setTimeout(() => {
+                t.style.opacity = '0';
+                t.style.transform = 'translateX(40px)';
+                t.style.transition = '0.3s';
+                setTimeout(() => t.remove(), 300);
+            }, 3000);
+        }
+
+        // ============================================================
+        // ===== BANCO DE DADOS =====
+        // ============================================================
+
+        function getDados() {
+            return {
+                custos: JSON.parse(localStorage.getItem('hong_custos') || '[]'),
+                saidas: JSON.parse(localStorage.getItem('hong_saidas') || '[]')
+            };
+        }
+
+        function salvarDados(custos, saidas) {
+            localStorage.setItem('hong_custos', JSON.stringify(custos));
+            localStorage.setItem('hong_saidas', JSON.stringify(saidas));
+            // Salvar também no Firebase
+            salvarNoFirebase(custos, saidas);
+        }
+
+        // ============================================================
+        // ===== FIREBASE - SALVAR E SINCRONIZAR =====
+        // ============================================================
+
+        let syncInProgress = false;
+
+        async function salvarNoFirebase(custos, saidas) {
+            try {
+                await db.collection('dados').doc('principal').set({
+                    custos: custos,
+                    saidas: saidas,
+                    ultimaAtualizacao: new Date().toISOString()
+                });
+                atualizarStatusFirebase(true);
+            } catch (error) {
+                console.error('Erro ao salvar no Firebase:', error);
+                atualizarStatusFirebase(false);
+                showToast('Erro ao sincronizar com a nuvem', 'error');
+            }
+        }
+
+        async function sincronizarFirebase() {
+            if (syncInProgress) return;
+            syncInProgress = true;
+            const btn = document.getElementById('btnSync');
+            btn.classList.add('syncing');
+            btn.textContent = '⏳ Sincronizando...';
+
+            try {
+                // Buscar dados do Firebase
+                const doc = await db.collection('dados').doc('principal').get();
+                if (doc.exists) {
+                    const dados = doc.data();
+                    if (dados.custos && dados.saidas) {
+                        // Perguntar se quer substituir ou mesclar
+                        if (confirm('Dados encontrados na nuvem. Deseja substituir os dados locais pelos da nuvem? (Cancelar para manter locais)')) {
+                            salvarDados(dados.custos, dados.saidas);
+                            renderizarTudo();
+                            showToast('Dados sincronizados da nuvem!', 'success');
+                        } else {
+                            // Salvar dados locais na nuvem
+                            const { custos, saidas } = getDados();
+                            await salvarNoFirebase(custos, saidas);
+                            showToast('Dados locais enviados para a nuvem!', 'success');
+                        }
+                    } else {
+                        // Se não tem dados, enviar os locais
+                        const { custos, saidas } = getDados();
+                        await salvarNoFirebase(custos, saidas);
+                        showToast('Dados enviados para a nuvem!', 'success');
+                    }
+                } else {
+                    // Se não existe documento, criar com dados locais
+                    const { custos, saidas } = getDados();
+                    await salvarNoFirebase(custos, saidas);
+                    showToast('Dados enviados para a nuvem!', 'success');
+                }
+                atualizarStatusFirebase(true);
+            } catch (error) {
+                console.error('Erro na sincronização:', error);
+                showToast('Erro ao sincronizar: ' + error.message, 'error');
+                atualizarStatusFirebase(false);
+            }
+
+            syncInProgress = false;
+            btn.classList.remove('syncing');
+            btn.textContent = '🔄 Sincronizar';
+        }
+
+        function atualizarStatusFirebase(online) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            if (online) {
+                dot.className = 'status-dot online';
+                text.textContent = 'Online';
+            } else {
+                dot.className = 'status-dot offline';
+                text.textContent = 'Offline';
+            }
+        }
+
+        // Verificar conexão com Firebase ao iniciar
+        async function verificarConexaoFirebase() {
+            try {
+                await db.collection('dados').doc('principal').get();
+                atualizarStatusFirebase(true);
+                // Tentar sincronizar automaticamente
+                const { custos, saidas } = getDados();
+                await salvarNoFirebase(custos, saidas);
+            } catch (error) {
+                console.warn('Firebase offline:', error);
+                atualizarStatusFirebase(false);
+            }
+        }
+
+        // ============================================================
+        // ===== HELPERS =====
+        // ============================================================
+
+        function formatarMoeda(v) {
+            return 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        }
+
+        function dataAtual() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function hoje() { return dataAtual(); }
+
+        function diasAte(data) {
+            const h = new Date();
+            h.setHours(0, 0, 0, 0);
+            const a = new Date(data + 'T00:00:00');
+            return Math.ceil((a - h) / (1000 * 60 * 60 * 24));
+        }
+
+        function getStatusSaida(s) {
+            if (s.status === 'pago') return 'pago';
+            const d = diasAte(s.vencimento);
+            if (d < 0) return 'vencido';
+            if (d === 0) return 'hoje';
+            return 'pendente';
+        }
+
+        function getStatusLabel(st) {
+            const map = {
+                'pago': '<span class="status-badge status-pago">Pago</span>',
+                'vencido': '<span class="status-badge status-vencido">Vencido</span>',
+                'hoje': '<span class="status-badge status-hoje">Vence Hoje</span>',
+                'pendente': '<span class="status-badge status-pendente">Pendente</span>'
+            };
+            return map[st] || map.pendente;
+        }
+
+        function getCentroTag(c) {
+            const cls = CENTRO_CUSTO_TAGS[c] || 'tag-ops';
+            const lbl = CENTRO_CUSTO_LABELS[c] || c;
+            return `<span class="tag ${cls}">${lbl}</span>`;
+        }
+
+        function getCategoriasUnicas() {
+            const { saidas } = getDados();
+            const cats = new Set();
+            saidas.forEach(s => cats.add(s.categoria));
+            return Array.from(cats).sort();
+        }
+
+        function getMesAno(data) {
+            const d = new Date(data);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        }
+
+        function getNomeMes(m) {
+            const n = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            return n[parseInt(m) - 1];
+        }
+
+        function limparTexto(texto) {
+            if (!texto) return '';
+            return texto
+                .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+                .replace(/[\u2600-\u27BF]/g, '')
+                .replace(/[\u{2700}-\u{27BF}]/gu, '')
+                .replace(/[✅🔴🟡🟢📌💸📊📅🚨📄💳🏦💰📝🏛️🛒👔🏭]/g, '')
+                .trim();
+        }
+
+        // ============================================================
+        // ===== PARCELAMENTO =====
+        // ============================================================
+
+        function calcularParcelas() {
+            const total = parseFloat(document.getElementById('saidaValor').value) || 0;
+            const parcelas = parseInt(document.getElementById('saidaParcelas').value) || 1;
+            const valorParcela = total / parcelas;
+            document.getElementById('saidaValorParcela').value = formatarMoeda(valorParcela);
+            document.getElementById('saidaParcelaAtual').max = parcelas;
+        }
+
+        // ============================================================
+        // ===== NAVEGAÇÃO =====
+        // ============================================================
+
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                const target = this.dataset.tab;
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById('tab' + target.charAt(0).toUpperCase() + target.slice(1)).classList.add('active');
+                renderizarTudo();
+                if (target === 'comparativo') renderizarComparativo();
+                selecionados = new Set();
+                atualizarBotoesSelecao();
+            });
+        });
+
+        // ============================================================
+        // ===== AUTO PREENCHIMENTO =====
+        // ============================================================
+
+        function atualizarCategoriaPorTipo() {
+            const tipo = document.getElementById('custoTipo').value;
+            const catSelect = document.getElementById('custoCategoria');
+            const centroSelect = document.getElementById('custoCentroCusto');
+            const infoBox = document.getElementById('custoInfo');
+            const infoText = document.getElementById('custoInfoText');
+            const grupoOutro = document.getElementById('grupoOutroTipo');
+
+            if (tipo === 'Outros') {
+                grupoOutro.style.display = 'block';
+                document.getElementById('custoOutroTipo').required = true;
+            } else {
+                grupoOutro.style.display = 'none';
+                document.getElementById('custoOutroTipo').required = false;
+            }
+
+            if (tipo && MAPA_CUSTOS_FIXOS[tipo]) {
+                const m = MAPA_CUSTOS_FIXOS[tipo];
+                catSelect.value = m.categoria;
+                centroSelect.value = m.centro;
+                infoBox.classList.remove('hidden');
+                infoText.textContent = `Categoria: ${m.categoria} | Centro: ${CENTRO_CUSTO_LABELS[m.centro]}`;
+                catSelect.disabled = true;
+                centroSelect.disabled = true;
+            } else if (tipo === 'Outros') {
+                catSelect.disabled = false;
+                centroSelect.disabled = false;
+                catSelect.value = 'Outros';
+                centroSelect.value = 'Operações';
+                infoBox.classList.add('hidden');
+            } else {
+                catSelect.disabled = false;
+                centroSelect.disabled = false;
+                catSelect.value = '';
+                centroSelect.value = '';
+                infoBox.classList.add('hidden');
+            }
+        }
+
+        // ============================================================
+        // ===== MODAIS =====
+        // ============================================================
+
+        function abrirModalCusto(custo = null) {
+            const modal = document.getElementById('modalCusto');
+            document.getElementById('modalCustoTitle').textContent = custo ? 'Editar Custo Fixo' : 'Novo Custo Fixo';
+            document.getElementById('custoId').value = custo ? custo.id : '';
+            document.getElementById('custoTipo').value = custo ? custo.tipo : '';
+            document.getElementById('custoValor').value = custo ? custo.valor : '';
+            document.getElementById('custoDia').value = custo ? custo.dia : '';
+
+            if (custo) {
+                document.getElementById('custoCategoria').value = custo.categoria;
+                document.getElementById('custoCentroCusto').value = custo.centroCusto;
+                if (custo.tipo === 'Outros') {
+                    document.getElementById('custoOutroTipo').value = custo.tipoPersonalizado || '';
+                    document.getElementById('grupoOutroTipo').style.display = 'block';
+                }
+                document.getElementById('custoInfo').classList.remove('hidden');
+                document.getElementById('custoInfoText').textContent =
+                    `Categoria: ${custo.categoria} | Centro: ${CENTRO_CUSTO_LABELS[custo.centroCusto]}`;
+                document.getElementById('custoCategoria').disabled = true;
+                document.getElementById('custoCentroCusto').disabled = true;
+            } else {
+                document.getElementById('custoCategoria').value = '';
+                document.getElementById('custoCentroCusto').value = '';
+                document.getElementById('custoOutroTipo').value = '';
+                document.getElementById('grupoOutroTipo').style.display = 'none';
+                document.getElementById('custoInfo').classList.add('hidden');
+                document.getElementById('custoCategoria').disabled = false;
+                document.getElementById('custoCentroCusto').disabled = false;
+            }
+
+            document.getElementById('custoTipo').onchange = atualizarCategoriaPorTipo;
+            modal.classList.add('show');
+        }
+
+        function abrirModalSaida(saida = null) {
+            const modal = document.getElementById('modalSaida');
+            document.getElementById('modalSaidaTitle').textContent = saida ? 'Editar Saída' : 'Nova Saída';
+
+            if (saida) {
+                document.getElementById('saidaId').value = saida.id;
+                document.getElementById('saidaDescricao').value = saida.descricao;
+                document.getElementById('saidaDataLancamento').value = saida.dataLancamento || dataAtual();
+                document.getElementById('saidaVencimento').value = saida.vencimento;
+                document.getElementById('saidaValor').value = saida.valor;
+                document.getElementById('saidaFormaPagamento').value = saida.formaPagamento || 'PIX';
+                document.getElementById('saidaCategoria').value = saida.categoria;
+                document.getElementById('saidaCentroCusto').value = saida.centroCusto || 'Operações';
+                document.getElementById('saidaStatus').value = saida.status;
+                document.getElementById('saidaDataPagamento').value = saida.dataPagamento || '';
+                document.getElementById('saidaObservacoes').value = saida.observacoes || '';
+                document.getElementById('saidaParcelas').value = saida.parcelas || 1;
+                document.getElementById('saidaParcelaAtual').value = saida.parcelaAtual || 1;
+                calcularParcelas();
+                document.getElementById('grupoDataPagamento').style.display = saida.status === 'pago' ? 'block' : 'none';
+            } else {
+                document.getElementById('saidaId').value = '';
+                document.getElementById('saidaDescricao').value = '';
+                document.getElementById('saidaDataLancamento').value = dataAtual();
+                document.getElementById('saidaVencimento').value = dataAtual();
+                document.getElementById('saidaValor').value = '';
+                document.getElementById('saidaFormaPagamento').value = 'PIX';
+                document.getElementById('saidaCategoria').value = 'Infraestrutura e Showroom';
+                document.getElementById('saidaCentroCusto').value = 'Operações';
+                document.getElementById('saidaStatus').value = 'pendente';
+                document.getElementById('saidaDataPagamento').value = '';
+                document.getElementById('saidaObservacoes').value = '';
+                document.getElementById('saidaParcelas').value = 1;
+                document.getElementById('saidaParcelaAtual').value = 1;
+                document.getElementById('saidaValorParcela').value = '';
+                document.getElementById('grupoDataPagamento').style.display = 'none';
+            }
+
+            modal.classList.add('show');
+        }
+
+        function fecharModal(id) {
+            document.getElementById(id).classList.remove('show');
+        }
+
+        function toggleDataPagamento() {
+            const st = document.getElementById('saidaStatus').value;
+            document.getElementById('grupoDataPagamento').style.display = st === 'pago' ? 'block' : 'none';
+        }
+
+        // Evento para recalcular parcelas quando valor muda
+        document.getElementById('saidaValor').addEventListener('input', calcularParcelas);
+        document.getElementById('saidaParcelas').addEventListener('change', calcularParcelas);
+
+        // ============================================================
+        // ===== CRUD CUSTOS =====
+        // ============================================================
+
+        function salvarCusto(e) {
+            e.preventDefault();
+            try {
+                const { custos, saidas } = getDados();
+                const id = document.getElementById('custoId').value;
+                let tipo = document.getElementById('custoTipo').value;
+                const valor = parseFloat(document.getElementById('custoValor').value);
+                const dia = parseInt(document.getElementById('custoDia').value);
+                let categoria = document.getElementById('custoCategoria').value;
+                let centroCusto = document.getElementById('custoCentroCusto').value;
+                let tipoPersonalizado = '';
+
+                if (!tipo) { showToast('Selecione um tipo.', 'error'); return; }
+                if (tipo === 'Outros') {
+                    tipoPersonalizado = document.getElementById('custoOutroTipo').value.trim();
+                    if (!tipoPersonalizado) { showToast('Digite o tipo personalizado.', 'error'); return; }
+                    tipo = tipoPersonalizado;
+                }
+                if (isNaN(valor) || valor <= 0) { showToast('Valor inválido.', 'error'); return; }
+                if (isNaN(dia) || dia < 1 || dia > 31) { showToast('Dia inválido (1-31).', 'error'); return; }
+                if (!categoria) { showToast('Selecione uma categoria.', 'error'); return; }
+                if (!centroCusto) { showToast('Selecione um centro.', 'error'); return; }
+
+                const novo = {
+                    id: id || 'c' + Date.now(),
+                    tipo,
+                    valor,
+                    dia,
+                    categoria,
+                    centroCusto,
+                    tipoPersonalizado: tipoPersonalizado || null,
+                    status: 'ativo',
+                    criadoEm: new Date().toISOString()
+                };
+
+                if (id) {
+                    const idx = custos.findIndex(c => c.id === id);
+                    if (idx !== -1) custos[idx] = novo;
+                    else { showToast('Custo não encontrado.', 'error'); return; }
+                    showToast('Custo atualizado!', 'success');
+                } else {
+                    custos.push(novo);
+                    showToast('Custo adicionado!', 'success');
+                }
+
+                salvarDados(custos, saidas);
+                fecharModal('modalCusto');
+                renderizarTudo();
+            } catch (err) {
+                showToast('Erro: ' + err.message, 'error');
+            }
+        }
+
+        function excluirCusto(id) {
+            if (!confirm('Excluir este custo?')) return;
+            const { custos, saidas } = getDados();
+            salvarDados(custos.filter(c => c.id !== id), saidas);
+            showToast('Custo excluído!', 'info');
+            renderizarTudo();
+        }
+
+        // ============================================================
+        // ===== CRUD SAÍDAS =====
+        // ============================================================
+
+        function salvarSaida(e) {
+            e.preventDefault();
+            try {
+                const { custos, saidas } = getDados();
+                const id = document.getElementById('saidaId').value;
+                const descricao = document.getElementById('saidaDescricao').value.trim();
+                const dataLancamento = document.getElementById('saidaDataLancamento').value;
+                const vencimento = document.getElementById('saidaVencimento').value;
+                const valor = parseFloat(document.getElementById('saidaValor').value);
+                const formaPagamento = document.getElementById('saidaFormaPagamento').value;
+                const categoria = document.getElementById('saidaCategoria').value;
+                const centroCusto = document.getElementById('saidaCentroCusto').value;
+                const status = document.getElementById('saidaStatus').value;
+                const observacoes = document.getElementById('saidaObservacoes').value.trim();
+                const parcelas = parseInt(document.getElementById('saidaParcelas').value) || 1;
+                const parcelaAtual = parseInt(document.getElementById('saidaParcelaAtual').value) || 1;
+                let dataPagamento = document.getElementById('saidaDataPagamento').value;
+
+                if (!descricao) { showToast('Digite a descrição.', 'error'); return; }
+                if (isNaN(valor) || valor <= 0) { showToast('Valor inválido.', 'error'); return; }
+                if (!vencimento) { showToast('Informe o vencimento.', 'error'); return; }
+                if (!categoria) { showToast('Selecione uma categoria.', 'error'); return; }
+                if (!centroCusto) { showToast('Selecione um centro.', 'error'); return; }
+                if (parcelaAtual > parcelas) { showToast('Parcela atual não pode ser maior que o total de parcelas.', 'error'); return; }
+
+                if (status === 'pago' && !dataPagamento) dataPagamento = dataAtual();
+
+                const valorParcela = valor / parcelas;
+
+                const novo = {
+                    id: id || 's' + Date.now(),
+                    descricao,
+                    dataLancamento: dataLancamento || dataAtual(),
+                    vencimento,
+                    valor,
+                    valorParcela: valorParcela,
+                    formaPagamento,
+                    categoria,
+                    centroCusto,
+                    status: status || 'pendente',
+                    dataPagamento: dataPagamento || null,
+                    observacoes: observacoes || null,
+                    parcelas: parcelas,
+                    parcelaAtual: parcelaAtual,
+                    criadoEm: new Date().toISOString()
+                };
+
+                if (id) {
+                    const idx = saidas.findIndex(s => s.id === id);
+                    if (idx !== -1) saidas[idx] = novo;
+                    else { showToast('Saída não encontrada.', 'error'); return; }
+                    showToast('Saída atualizada!', 'success');
+                } else {
+                    saidas.push(novo);
+                    showToast('Saída adicionada!', 'success');
+                }
+
+                salvarDados(custos, saidas);
+                fecharModal('modalSaida');
+                renderizarTudo();
+            } catch (err) {
+                showToast('Erro: ' + err.message, 'error');
+            }
+        }
+
+        function excluirSaida(id) {
+            if (!confirm('Excluir esta saída?')) return;
+            const { custos, saidas } = getDados();
+            salvarDados(custos, saidas.filter(s => s.id !== id));
+            selecionados.delete(id);
+            atualizarBotoesSelecao();
+            showToast('Saída excluída!', 'info');
+            renderizarTudo();
+        }
+
+        // ============================================================
+        // ===== DUPLICAR SAÍDA =====
+        // ============================================================
+
+        function duplicarSaida(id) {
+            const { custos, saidas } = getDados();
+            const original = saidas.find(s => s.id === id);
+            if (!original) {
+                showToast('Saída não encontrada.', 'error');
+                return;
+            }
+
+            const copia = {
+                ...original,
+                id: 's' + Date.now(),
+                descricao: original.descricao + ' (cópia)',
+                status: 'pendente',
+                dataPagamento: null,
+                parcelaAtual: 1,
+                criadoEm: new Date().toISOString()
+            };
+
+            saidas.push(copia);
+            salvarDados(custos, saidas);
+            showToast('Saída duplicada com sucesso!', 'success');
+            renderizarTudo();
+        }
+
+        // ============================================================
+        // ===== SELEÇÃO EM LOTE =====
+        // ============================================================
+
+        let selecionados = new Set();
+
+        function toggleSelectAll() {
+            const checked = document.getElementById('selectAll').checked;
+            const checkboxes = document.querySelectorAll('.checkbox-item');
+            checkboxes.forEach(cb => {
+                cb.checked = checked;
+                if (checked) {
+                    selecionados.add(cb.dataset.id);
+                } else {
+                    selecionados.delete(cb.dataset.id);
+                }
+            });
+            atualizarBotoesSelecao();
+        }
+
+        function toggleSelecionado(id) {
+            const cb = document.querySelector(`.checkbox-item[data-id="${id}"]`);
+            if (cb) {
+                if (cb.checked) {
+                    selecionados.add(id);
+                } else {
+                    selecionados.delete(id);
+                }
+            }
+            atualizarBotoesSelecao();
+            const allCbs = document.querySelectorAll('.checkbox-item');
+            const allChecked = allCbs.length > 0 && Array.from(allCbs).every(c => c.checked);
+            document.getElementById('selectAll').checked = allChecked;
+        }
+
+        function atualizarBotoesSelecao() {
+            const btn = document.getElementById('btnExcluirSelecionados');
+            const contador = document.getElementById('contadorSelecionados');
+            const total = selecionados.size;
+            contador.textContent = total + ' selecionado(s)';
+            btn.style.display = total > 0 ? 'inline-block' : 'none';
+            btn.textContent = 'Excluir ' + total + ' selecionado(s)';
+        }
+
+        function excluirSelecionados() {
+            const total = selecionados.size;
+            if (total === 0) {
+                showToast('Nenhum item selecionado.', 'warning');
+                return;
+            }
+            if (!confirm('Excluir ' + total + ' saída(s) selecionada(s)?')) return;
+
+            const { custos, saidas } = getDados();
+            const idsParaExcluir = new Set(selecionados);
+            const novasSaidas = saidas.filter(s => !idsParaExcluir.has(s.id));
+            salvarDados(custos, novasSaidas);
+            selecionados = new Set();
+            atualizarBotoesSelecao();
+            showToast(total + ' saída(s) excluída(s)!', 'success');
+            renderizarTudo();
+        }
+
+        // ============================================================
+        // ===== CONFIRMAR PAGAMENTO =====
+        // ============================================================
+
+        let pagamentoId = null;
+
+        function abrirConfirmacaoPagamento(id) {
+            const { saidas } = getDados();
+            const s = saidas.find(s => s.id === id);
+            if (!s) return;
+            pagamentoId = id;
+            document.getElementById('confirmDescricao').textContent = s.descricao;
+            document.getElementById('confirmValor').textContent = formatarMoeda(s.valor);
+            document.getElementById('confirmVencimento').textContent = s.vencimento;
+            document.getElementById('confirmFormaPagamento').textContent = s.formaPagamento || 'PIX';
+            document.getElementById('confirmParcelas').textContent = s.parcelas > 1 ? s.parcelaAtual + '/' + s.parcelas : 'À vista';
+            document.getElementById('confirmDataPagamento').value = dataAtual();
+            document.getElementById('modalConfirmarPagamento').classList.add('show');
+        }
+
+        function confirmarPagamento() {
+            const data = document.getElementById('confirmDataPagamento').value;
+            if (!data) { showToast('Informe a data.', 'error'); return; }
+            const { custos, saidas } = getDados();
+            const idx = saidas.findIndex(s => s.id === pagamentoId);
+            if (idx !== -1) {
+                const saida = saidas[idx];
+                // Se for parcelado, avançar para próxima parcela
+                if (saida.parcelas > 1 && saida.parcelaAtual < saida.parcelas) {
+                    saida.parcelaAtual += 1;
+                    saida.vencimento = new Date(new Date(saida.vencimento).setMonth(new Date(saida.vencimento).getMonth() + 1)).toISOString().split('T')[0];
+                    showToast('Parcela ' + (saida.parcelaAtual - 1) + ' paga! Próxima parcela gerada.', 'info');
+                } else if (saida.parcelas > 1 && saida.parcelaAtual === saida.parcelas) {
+                    saida.status = 'pago';
+                    saida.dataPagamento = data;
+                    showToast('Última parcela paga! Conta concluída.', 'success');
+                } else {
+                    saida.status = 'pago';
+                    saida.dataPagamento = data;
+                    showToast('Pagamento confirmado!', 'success');
+                }
+                salvarDados(custos, saidas);
+            }
+            fecharModal('modalConfirmarPagamento');
+            renderizarTudo();
+        }
+
+        // ============================================================
+        // ===== EXPORTAR / IMPORTAR =====
+        // ============================================================
+
+        function exportarDados() {
+            const d = getDados();
+            const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `Hong_Decor_Backup_${dataAtual()}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast('Dados exportados!', 'success');
+        }
+
+        function importarDados(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const d = JSON.parse(e.target.result);
+                    if (d.custos && d.saidas) {
+                        salvarDados(d.custos, d.saidas);
+                        renderizarTudo();
+                        showToast('Dados importados!', 'success');
+                    } else {
+                        showToast('Arquivo inválido.', 'error');
+                    }
+                } catch (err) {
+                    showToast('Erro: ' + err.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // ============================================================
+        // ===== ORDENAÇÃO =====
+        // ============================================================
+
+        let ordemCustos = { campo: 'tipo', dir: 'asc' };
+        let ordemSaidas = { campo: 'dataLancamento', dir: 'desc' };
+
+        function ordenarCustos(campo) {
+            if (ordemCustos.campo === campo) ordemCustos.dir = ordemCustos.dir === 'asc' ? 'desc' : 'asc';
+            else { ordemCustos.campo = campo;
+                ordemCustos.dir = 'asc'; }
+            renderizarFixos();
+        }
+
+        function ordenarSaidas(campo) {
+            if (ordemSaidas.campo === campo) ordemSaidas.dir = ordemSaidas.dir === 'asc' ? 'desc' : 'asc';
+            else { ordemSaidas.campo = campo;
+                ordemSaidas.dir = 'asc'; }
+            renderizarSaidas();
+        }
+
+        // ============================================================
+        // ===== FILTRO CARDS =====
+        // ============================================================
+
+        function aplicarFiltroStatus(status) {
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('[data-tab="saidas"]').classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('tabSaidas').classList.add('active');
+            document.getElementById('filtroStatusSaida').value = status;
+            selecionados = new Set();
+            atualizarBotoesSelecao();
+            renderizarSaidas();
+            document.querySelector('.table-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // ============================================================
+        // ===== RENDERIZAÇÃO =====
+        // ============================================================
+
+        let paginaAtual = 1;
+
+        function renderizarTudo() {
+            renderizarResumo();
+            renderizarFixos();
+            renderizarSaidas();
+            atualizarBadges();
+            atualizarFiltrosCategoria();
+        }
+
+        // ---- RESUMO ----
+        function renderizarResumo() {
+            const { custos, saidas } = getDados();
+            const hojeStr = hoje();
+            const mes = new Date().getMonth();
+            const ano = new Date().getFullYear();
+
+            const saidasMes = saidas.filter(s => {
+                const d = new Date(s.vencimento);
+                return d.getMonth() === mes && d.getFullYear() === ano;
+            });
+
+            const pendentes = saidasMes.filter(s => s.status !== 'pago');
+            const pagas = saidasMes.filter(s => s.status === 'pago');
+
+            const vencidosHoje = saidas.filter(s => s.status !== 'pago' && s.vencimento === hojeStr);
+            const totalVencidosHoje = vencidosHoje.reduce((a, s) => a + s.valor, 0);
+
+            const vencem3Dias = saidas.filter(s => {
+                if (s.status === 'pago') return false;
+                const d = diasAte(s.vencimento);
+                return d >= 1 && d <= 3;
+            });
+            const totalVencem3Dias = vencem3Dias.reduce((a, s) => a + s.valor, 0);
+
+            const vencemSemana = saidas.filter(s => {
+                if (s.status === 'pago') return false;
+                const d = diasAte(s.vencimento);
+                return d >= 1 && d <= 7;
+            });
+            const totalVencemSemana = vencemSemana.reduce((a, s) => a + s.valor, 0);
+
+            const totalPagoMes = pagas.reduce((a, s) => a + s.valor, 0);
+
+            const totalCustos = custos.filter(c => c.status !== 'inativo').reduce((a, c) => a + c.valor, 0);
+            const totalPendentes = pendentes.reduce((a, s) => a + s.valor, 0);
+            const previsao = totalCustos + totalPendentes;
+
+            document.getElementById('vencidosHoje').textContent = formatarMoeda(totalVencidosHoje);
+            document.getElementById('qtdVencidosHoje').textContent = vencidosHoje.length + ' conta(s)';
+            document.getElementById('vencem3Dias').textContent = formatarMoeda(totalVencem3Dias);
+            document.getElementById('qtdVencem3Dias').textContent = vencem3Dias.length + ' conta(s)';
+            document.getElementById('vencemSemana').textContent = formatarMoeda(totalVencemSemana);
+            document.getElementById('qtdVencemSemana').textContent = vencemSemana.length + ' conta(s)';
+            document.getElementById('totalPagoMes').textContent = formatarMoeda(totalPagoMes);
+            document.getElementById('qtdPagoMes').textContent = pagas.length + ' conta(s)';
+            document.getElementById('previsaoMes').textContent = formatarMoeda(previsao);
+            document.getElementById('totalContas').textContent = saidas.length;
+            document.getElementById('resumoStatusContas').textContent =
+                `Pagas: ${saidas.filter(s=>s.status==='pago').length} | Pendentes: ${saidas.filter(s=>s.status!=='pago').length}`;
+
+            const alertas = saidas.filter(s => {
+                if (s.status === 'pago') return false;
+                const d = diasAte(s.vencimento);
+                return d >= -1 && d <= 7;
+            }).sort((a, b) => diasAte(a.vencimento) - diasAte(b.vencimento));
+
+            const div = document.getElementById('alertasLista');
+            if (alertas.length === 0) {
+                div.innerHTML = `<div class="empty-state">Nenhum alerta nos próximos 7 dias.</div>`;
+            } else {
+                div.innerHTML = alertas.map(s => {
+                    const d = diasAte(s.vencimento);
+                    let cls = 'warning';
+                    let lbl = `Vence em ${d} dia(s)`;
+                    if (d < 0) { cls = 'urgent';
+                        lbl = 'VENCIDO!'; } else if (d === 0) { cls = 'urgent';
+                        lbl = 'VENCE HOJE!'; } else if (d <= 2) { cls = 'urgent'; }
+                    return `
+                            <div class="alert-item ${cls}">
+                                <div class="alert-info">
+                                    <strong>${s.vencimento}</strong>
+                                    <span>${s.descricao}</span>
+                                    <span class="alert-value">${formatarMoeda(s.valor)}</span>
+                                    ${getStatusLabel(getStatusSaida(s))}
+                                    ${getCentroTag(s.centroCusto || 'Operações')}
+                                    ${s.parcelas > 1 ? `<span class="parcela-info">${s.parcelaAtual}/${s.parcelas}</span>` : ''}
+                                </div>
+                                <div>
+                                    <span style="font-size:8px;color:#95a5a6;">${lbl}</span>
+                                    <button class="btn btn-success btn-sm" onclick="abrirConfirmacaoPagamento('${s.id}')">Pagar</button>
+                                </div>
+                            </div>
+                        `;
+                }).join('');
+            }
+
+            const prox30 = [];
+            for (let i = 0; i < 30; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() + i);
+                const ds = d.toISOString().split('T')[0];
+                const total = saidas.filter(s => s.status !== 'pago' && s.vencimento === ds).reduce((a, s) => a + s.valor, 0);
+                const dia = d.getDate();
+                const cDia = custos.filter(c => c.status !== 'inativo' && c.dia === dia).reduce((a, c) => a + c.valor, 0);
+                prox30.push({ data: ds, total: total + cDia, dia: i + 1 });
+            }
+
+            const maxVal = Math.max(...prox30.map(p => p.total), 1);
+            const gDiv = document.getElementById('graficoPrevisao');
+            gDiv.innerHTML = `
+                    <div style="display:flex; gap:2px; align-items:flex-end; height:60px; padding:3px 2px; overflow-x:auto;">
+                        ${prox30.map(p => {
+                            const alt = (p.total / maxVal) * 55;
+                            const cor = p.total > 0 ? '#e74c3c' : '#ecf0f1';
+                            return `
+                                <div style="flex:1; min-width:10px; display:flex; flex-direction:column; align-items:center;">
+                                    <div style="width:100%; height:${Math.max(alt, 2)}px; background:${cor}; border-radius:2px 2px 0 0; min-height:2px;"></div>
+                                    <span style="font-size:6px; color:#95a5a6; margin-top:1px;">${p.dia}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:7px; color:#95a5a6; padding:0 2px;">
+                        <span>Hoje</span>
+                        <span>Próximos 30 dias</span>
+                    </div>
+                `;
+        }
+
+        // ---- CUSTOS FIXOS ----
+        function renderizarFixos() {
+            const { custos, saidas } = getDados();
+            const tbody = document.getElementById('tabelaFixos');
+            const mesAtual = new Date().getMonth();
+            const anoAtual = new Date().getFullYear();
+
+            let lista = [...custos];
+            lista.sort((a, b) => {
+                let va = a[ordemCustos.campo],
+                    vb = b[ordemCustos.campo];
+                if (typeof va === 'string') va = va.toLowerCase();
+                if (typeof vb === 'string') vb = vb.toLowerCase();
+                if (va < vb) return ordemCustos.dir === 'asc' ? -1 : 1;
+                if (va > vb) return ordemCustos.dir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            if (lista.length === 0) {
+                tbody.innerHTML =
+                    `<tr><td colspan="8" class="empty-state">Nenhum custo fixo cadastrado.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = lista.map(c => {
+                const mesStr = String(mesAtual + 1).padStart(2, '0');
+                const anoStr = String(anoAtual);
+                const diaStr = String(c.dia).padStart(2, '0');
+                const dataVenc = `${anoStr}-${mesStr}-${diaStr}`;
+
+                const pago = saidas.some(s =>
+                    s.descricao.includes(c.tipo) &&
+                    s.status === 'pago' &&
+                    s.vencimento === dataVenc
+                );
+
+                const situacao = pago ? 'Pago' : 'Pendente';
+                const situacaoClass = pago ? 'status-pago' : 'status-pendente';
+
+                return `
+                        <tr>
+                            <td><strong>${c.tipo}</strong></td>
+                            <td>${formatarMoeda(c.valor)}</td>
+                            <td>Dia ${c.dia}</td>
+                            <td>${c.categoria}</td>
+                            <td>${getCentroTag(c.centroCusto || 'Operações')}</td>
+                            <td><span class="status-badge ${c.status === 'ativo' ? 'status-ativo' : 'status-inativo'}">${c.status === 'ativo' ? 'Ativo' : 'Inativo'}</span></td>
+                            <td><span class="status-badge ${situacaoClass}">${situacao}</span></td>
+                            <td>
+                                <div class="actions">
+                                    <button class="btn btn-warning btn-sm" onclick='abrirModalCusto(${JSON.stringify(c).replace(/'/g, "&#39;")})'>Editar</button>
+                                    <button class="btn btn-danger btn-sm" onclick="excluirCusto('${c.id}')">Excluir</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+            }).join('');
+        }
+
+        // ---- SAÍDAS ----
+        function renderizarSaidas() {
+            const { saidas } = getDados();
+            const busca = document.getElementById('buscaTexto').value.toLowerCase().trim();
+            const fStatus = document.getElementById('filtroStatusSaida').value;
+            const fForma = document.getElementById('filtroFormaPagamento').value;
+            const fCat = document.getElementById('filtroCategoriaSaida').value;
+            const fCentro = document.getElementById('filtroCentroCusto').value;
+            const dIni = document.getElementById('filtroDataInicio').value;
+            const dFim = document.getElementById('filtroDataFim').value;
+
+            let filtradas = [...saidas];
+
+            if (busca) {
+                filtradas = filtradas.filter(s =>
+                    s.descricao.toLowerCase().includes(busca) ||
+                    s.categoria.toLowerCase().includes(busca) ||
+                    s.valor.toString().includes(busca) ||
+                    (s.centroCusto || '').toLowerCase().includes(busca)
+                );
+            }
+
+            if (fStatus !== 'todos') {
+                if (fStatus === 'vencido') {
+                    filtradas = filtradas.filter(s => s.status !== 'pago' && diasAte(s.vencimento) < 0);
+                } else {
+                    filtradas = filtradas.filter(s => s.status === fStatus);
+                }
+            }
+
+            if (fForma !== 'todas') filtradas = filtradas.filter(s => s.formaPagamento === fForma);
+            if (fCat !== 'todas') filtradas = filtradas.filter(s => s.categoria === fCat);
+            if (fCentro !== 'todos') filtradas = filtradas.filter(s => s.centroCusto === fCentro);
+            if (dIni) filtradas = filtradas.filter(s => s.vencimento >= dIni);
+            if (dFim) filtradas = filtradas.filter(s => s.vencimento <= dFim);
+
+            filtradas.sort((a, b) => {
+                let va = a[ordemSaidas.campo] || '',
+                    vb = b[ordemSaidas.campo] || '';
+                if (typeof va === 'string') va = va.toLowerCase();
+                if (typeof vb === 'string') vb = vb.toLowerCase();
+                if (va < vb) return ordemSaidas.dir === 'asc' ? -1 : 1;
+                if (va > vb) return ordemSaidas.dir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            const total = filtradas.length;
+            const totalPag = Math.ceil(total / ITENS_POR_PAGINA);
+            if (paginaAtual > totalPag) paginaAtual = totalPag || 1;
+            if (paginaAtual < 1) paginaAtual = 1;
+
+            const ini = (paginaAtual - 1) * ITENS_POR_PAGINA;
+            const fim = Math.min(ini + ITENS_POR_PAGINA, total);
+            const pagina = filtradas.slice(ini, fim);
+
+            const tbody = document.getElementById('tabelaSaidas');
+
+            if (pagina.length === 0) {
+                tbody.innerHTML =
+                    `<tr><td colspan="11" class="empty-state">Nenhuma saída encontrada.</td></tr>`;
+                selecionados = new Set();
+                atualizarBotoesSelecao();
+                document.getElementById('selectAll').checked = false;
+            } else {
+                tbody.innerHTML = pagina.map(s => {
+                    const st = getStatusSaida(s);
+                    const d = diasAte(s.vencimento);
+                    let lbl = '';
+                    if (st === 'vencido') lbl = 'Vencido há ' + Math.abs(d) + ' dias';
+                    else if (st === 'hoje') lbl = 'Vence hoje!';
+                    else if (st === 'pendente') lbl = d + ' dias';
+                    else lbl = 'Pago';
+
+                    const isVencido = st === 'vencido' || st === 'hoje';
+                    const rowClass = isVencido ? 'highlight-row' : '';
+                    const checked = selecionados.has(s.id) ? 'checked' : '';
+
+                    const parcelaInfo = s.parcelas > 1 ? `${s.parcelaAtual}/${s.parcelas}` : '1/1';
+
+                    return `
+                            <tr class="${rowClass}">
+                                <td class="checkbox-col">
+                                    <input type="checkbox" class="checkbox-item" data-id="${s.id}" ${checked} onchange="toggleSelecionado('${s.id}')">
+                                </td>
+                                <td>${s.dataLancamento || s.criadoEm?.split('T')[0] || '-'}</td>
+                                <td>${s.vencimento}</td>
+                                <td><strong>${s.descricao}</strong>${s.observacoes ? `<br><span style="font-size:8px;color:#95a5a6;">${s.observacoes}</span>` : ''}</td>
+                                <td>${formatarMoeda(s.valor)}</td>
+                                <td>${s.formaPagamento || 'PIX'}</td>
+                                <td>${s.categoria}</td>
+                                <td>${getCentroTag(s.centroCusto || 'Operações')}</td>
+                                <td>${getStatusLabel(st)}</td>
+                                <td><span class="parcela-info">${parcelaInfo}</span></td>
+                                <td>
+                                    <div class="actions">
+                                        ${s.status !== 'pago' ? `<button class="btn btn-success btn-xs" onclick="abrirConfirmacaoPagamento('${s.id}')">Pagar</button>` : ''}
+                                        <button class="btn btn-warning btn-xs" onclick="duplicarSaida('${s.id}')" title="Duplicar">📋</button>
+                                        <button class="btn btn-warning btn-xs" onclick='abrirModalSaida(${JSON.stringify(s).replace(/'/g, "&#39;")})'>Editar</button>
+                                        <button class="btn btn-danger btn-xs" onclick="excluirSaida('${s.id}')">Excluir</button>
+                                    </div>
+                                    <div style="font-size:7px;color:#95a5a6;margin-top:1px;">${lbl}</div>
+                                </td>
+                            </tr>
+                        `;
+                }).join('');
+
+                const allCbs = document.querySelectorAll('.checkbox-item');
+                const allChecked = allCbs.length > 0 && Array.from(allCbs).every(c => c.checked);
+                document.getElementById('selectAll').checked = allChecked;
+                atualizarBotoesSelecao();
+            }
+
+            const pagDiv = document.getElementById('paginacaoSaidas');
+            const infoDiv = document.getElementById('infoPaginas');
+
+            if (totalPag <= 1) {
+                pagDiv.innerHTML = '';
+                infoDiv.textContent = total > 0 ? `Total: ${total} lançamentos` : '';
+                return;
+            }
+
+            let html = '';
+            html +=
+                `<button onclick="irPagina(${paginaAtual - 1})" ${paginaAtual === 1 ? 'disabled' : ''}>Anterior</button>`;
+            for (let i = 1; i <= totalPag; i++) {
+                if (i === 1 || i === totalPag || Math.abs(i - paginaAtual) <= 2) {
+                    html +=
+                        `<button onclick="irPagina(${i})" class="${i === paginaAtual ? 'active' : ''}">${i}</button>`;
+                } else if (i === paginaAtual - 3 || i === paginaAtual + 3) {
+                    html += `<button disabled>...</button>`;
+                }
+            }
+            html +=
+                `<button onclick="irPagina(${paginaAtual + 1})" ${paginaAtual === totalPag ? 'disabled' : ''}>Próxima</button>`;
+
+            pagDiv.innerHTML = html;
+            infoDiv.textContent = `Mostrando ${ini + 1} - ${fim} de ${total} | Página ${paginaAtual} de ${totalPag}`;
+        }
+
+        function irPagina(p) {
+            const { saidas } = getDados();
+            const total = Math.ceil(saidas.length / ITENS_POR_PAGINA);
+            if (p < 1 || p > total) return;
+            paginaAtual = p;
+            selecionados = new Set();
+            atualizarBotoesSelecao();
+            renderizarSaidas();
+            document.querySelector('.table-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // ---- BADGES ----
+        function atualizarBadges() {
+            const { saidas } = getDados();
+            const urgentes = saidas.filter(s => s.status !== 'pago' && diasAte(s.vencimento) <= 1);
+            document.getElementById('alertBadge').textContent = urgentes.length;
+            const pendentes = saidas.filter(s => s.status !== 'pago');
+            document.getElementById('pendenteBadge').textContent = pendentes.length;
+        }
+
+        // ---- FILTROS CATEGORIA ----
+        function atualizarFiltrosCategoria() {
+            const select = document.getElementById('filtroCategoriaSaida');
+            const cats = getCategoriasUnicas();
+            const val = select.value;
+            select.innerHTML = '<option value="todas">Todas Categorias</option>';
+            cats.forEach(c => { select.innerHTML += `<option value="${c}">${c}</option>`; });
+            select.value = val;
+        }
+
+        function limparFiltrosSaida() {
+            document.getElementById('buscaTexto').value = '';
+            document.getElementById('filtroStatusSaida').value = 'todos';
+            document.getElementById('filtroFormaPagamento').value = 'todas';
+            document.getElementById('filtroCategoriaSaida').value = 'todas';
+            document.getElementById('filtroCentroCusto').value = 'todos';
+            document.getElementById('filtroDataInicio').value = '';
+            document.getElementById('filtroDataFim').value = '';
+            paginaAtual = 1;
+            selecionados = new Set();
+            atualizarBotoesSelecao();
+            renderizarSaidas();
+            showToast('Filtros limpos!', 'info');
+        }
+
+        // ============================================================
+        // ===== COMPARATIVO =====
+        // ============================================================
+
+        function renderizarComparativo() {
+            const { saidas } = getDados();
+            const ano = parseInt(document.getElementById('selectAnoComparativo').value);
+
+            const totalPagoMensal = {};
+            for (let m = 1; m <= 12; m++) {
+                const key = `${ano}-${String(m).padStart(2, '0')}`;
+                totalPagoMensal[key] = saidas
+                    .filter(s => s.status === 'pago' && s.dataPagamento && getMesAno(s.dataPagamento) === key)
+                    .reduce((a, s) => a + s.valor, 0);
+            }
+
+            const totalPendenteMensal = {};
+            for (let m = 1; m <= 12; m++) {
+                const key = `${ano}-${String(m).padStart(2, '0')}`;
+                totalPendenteMensal[key] = saidas
+                    .filter(s => s.status !== 'pago' && s.vencimento && getMesAno(s.vencimento) === key)
+                    .reduce((a, s) => a + s.valor, 0);
+            }
+
+            const meses = [];
+            for (let m = 1; m <= 12; m++) {
+                const key = `${ano}-${String(m).padStart(2, '0')}`;
+                meses.push({
+                    mes: m,
+                    nome: getNomeMes(m),
+                    pago: totalPagoMensal[key] || 0,
+                    pendente: totalPendenteMensal[key] || 0,
+                    total: (totalPagoMensal[key] || 0) + (totalPendenteMensal[key] || 0)
+                });
+            }
+
+            const maxValor = Math.max(...meses.map(m => m.total), 1);
+            const gDiv = document.getElementById('graficoComparativo');
+
+            gDiv.innerHTML = `
+                <div style="display:flex; gap:3px; align-items:flex-end; height:140px; padding:6px 4px; overflow-x:auto;">
+                    ${meses.map(m => {
+                        const alturaPago = ((m.pago || 0) / maxValor) * 125;
+                        const alturaPendente = ((m.pendente || 0) / maxValor) * 125;
+                        const temDados = m.total > 0;
+                        return `
+                            <div style="flex:1; min-width:40px; display:flex; flex-direction:column; align-items:center;">
+                                <div style="width:100%; display:flex; gap:2px; align-items:flex-end; height:125px; position:relative;">
+                                    ${temDados ? `
+                                        <div style="flex:1; height:${Math.max(alturaPago, 2)}px; background:#27ae60; border-radius:2px 2px 0 0; min-height:2px;" title="Pago: ${formatarMoeda(m.pago)}"></div>
+                                        <div style="flex:1; height:${Math.max(alturaPendente, 2)}px; background:#e74c3c; border-radius:2px 2px 0 0; min-height:2px;" title="Pendente: ${formatarMoeda(m.pendente)}"></div>
+                                    ` : `
+                                        <div style="flex:1; height:2px; background:#ecf0f1; border-radius:2px 2px 0 0;"></div>
+                                    `}
+                                </div>
+                                <span style="font-size:8px; color:#95a5a6; margin-top:2px; font-weight:600;">${m.nome}</span>
+                                ${temDados ? `<span style="font-size:7px; color:#555;">${formatarMoeda(m.total)}</span>` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                <div style="display:flex; justify-content:center; gap:15px; margin-top:6px; font-size:9px; color:#555; flex-wrap:wrap;">
+                    <span><span style="display:inline-block; width:10px; height:10px; background:#27ae60; border-radius:2px; vertical-align:middle;"></span> Pago</span>
+                    <span><span style="display:inline-block; width:10px; height:10px; background:#e74c3c; border-radius:2px; vertical-align:middle;"></span> Pendente</span>
+                </div>
+            `;
+
+            const tDiv = document.getElementById('tabelaComparativo');
+            const totalAnoPago = meses.reduce((a, m) => a + m.pago, 0);
+            const totalAnoPendente = meses.reduce((a, m) => a + m.pendente, 0);
+            const totalAno = meses.reduce((a, m) => a + m.total, 0);
+
+            tDiv.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mês</th>
+                            <th style="text-align:right;">Total Pago</th>
+                            <th style="text-align:right;">Pendente</th>
+                            <th style="text-align:right;">Total do Mês</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${meses.map(m => `
+                            <tr>
+                                <td><strong>${m.nome}</strong></td>
+                                <td style="text-align:right; color:#27ae60; font-weight:600;">${formatarMoeda(m.pago)}</td>
+                                <td style="text-align:right; color:#e74c3c;">${formatarMoeda(m.pendente)}</td>
+                                <td style="text-align:right; font-weight:700;">${formatarMoeda(m.total)}</td>
+                            </tr>
+                        `).join('')}
+                        <tr style="background:#f8f9fa; font-weight:700; border-top:2px solid #bdc3c7;">
+                            <td><strong>TOTAL ${ano}</strong></td>
+                            <td style="text-align:right; color:#27ae60; font-weight:700;">${formatarMoeda(totalAnoPago)}</td>
+                            <td style="text-align:right; color:#e74c3c; font-weight:700;">${formatarMoeda(totalAnoPendente)}</td>
+                            <td style="text-align:right; font-weight:700;">${formatarMoeda(totalAno)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // ============================================================
+        // ===== GERAR PDF =====
+        // ============================================================
+
+        function gerarPDF() {
+            const { saidas } = getDados();
+            const pendentes = saidas.filter(s => s.status !== 'pago');
+
+            if (pendentes.length === 0) {
+                showToast('Não há contas pendentes.', 'warning');
+                return;
+            }
+
+            const pix = pendentes.filter(s => s.formaPagamento === 'PIX');
+            const boleto = pendentes.filter(s => s.formaPagamento === 'Boleto');
+            const outras = pendentes.filter(s => s.formaPagamento !== 'PIX' && s.formaPagamento !== 'Boleto');
+
+            const ordenar = (arr) => arr.sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+            ordenar(pix);
+            ordenar(boleto);
+            ordenar(outras);
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape', 'mm', 'a4');
+
+            const pw = doc.internal.pageSize.getWidth();
+            const ph = doc.internal.pageSize.getHeight();
+            const margem = 12;
+            const larguraUtil = pw - (margem * 2);
+
+            let y = margem;
+
+            // CABEÇALHO
+            const hoje = new Date();
+            const dataStr = hoje.toLocaleDateString('pt-BR');
+            const mesStr = hoje.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(30, 30, 30);
+            doc.text('Hong Decor - Contas a Pagar', pw / 2, y, { align: 'center' });
+            y += 7;
+
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Período: ${mesStr}`, margem + 5, y);
+            doc.text(`Emissão: ${dataStr}`, pw / 2 - 15, y, { align: 'center' });
+            doc.text(`Total: ${pendentes.length} contas`, pw - margem - 5, y, { align: 'right' });
+            y += 8;
+
+            doc.setDrawColor(180, 180, 180);
+            doc.setLineWidth(0.5);
+            doc.line(margem, y, pw - margem, y);
+            y += 6;
+
+            // FUNÇÃO PARA GERAR TABELA
+            function gerarTabela(titulo, dados, colunas, total, yPos, config = {}) {
+                if (dados.length === 0) return yPos;
+
+                const { isOutras = false, isResumo = false } = config;
+
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(40, 40, 40);
+                doc.text(titulo + ' (' + dados.length + ')', margem, yPos);
+
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100, 100, 100);
+                doc.text('Total: ' + formatarMoeda(total), pw - margem, yPos, { align: 'right' });
+                yPos += 5;
+
+                const numColunas = colunas.length;
+                const larguraTotal = larguraUtil;
+
+                let percentuais = [];
+                if (isOutras) {
+                    percentuais = [10, 28, 16, 14, 20, 12];
+                } else if (isResumo) {
+                    percentuais = [45, 30, 25];
+                } else {
+                    percentuais = [12, 34, 14, 26, 14];
+                }
+
+                const somaPercentuais = percentuais.reduce((a, b) => a + b, 0);
+                if (somaPercentuais !== 100) {
+                    const fator = 100 / somaPercentuais;
+                    percentuais = percentuais.map(p => Math.round(p * fator));
+                }
+
+                const larguras = percentuais.map(p => (p / 100) * larguraTotal);
+                const somaLarguras = larguras.reduce((a, b) => a + b, 0);
+                if (somaLarguras < larguraTotal) {
+                    larguras[larguras.length - 1] += (larguraTotal - somaLarguras);
+                }
+
+                const colStyles = {};
+                larguras.forEach((larg, idx) => {
+                    let align = 'center';
+                    if (idx === 1 || idx === 4 || (isOutras && idx === 4)) align = 'left';
+                    if (idx === 2 || (isOutras && idx === 3)) align = 'right';
+                    if (idx === 2 && !isOutras) align = 'right';
+                    if (isOutras && idx === 3) align = 'right';
+                    if (isResumo && idx === 1) align = 'right';
+                    colStyles[idx] = { cellWidth: larg, halign: align };
+                });
+
+                const fontSizeHead = 7;
+                const fontSizeBody = 6.5;
+
+                doc.autoTable({
+                    startY: yPos,
+                    head: [colunas],
+                    body: dados,
+                    theme: 'grid',
+                    headStyles: {
+                        fillColor: [44, 62, 80],
+                        textColor: [255, 255, 255],
+                        fontSize: fontSizeHead,
+                        halign: 'center',
+                        valign: 'middle',
+                        lineWidth: 0.1,
+                        lineColor: [44, 62, 80],
+                        cellPadding: 1.5
+                    },
+                    bodyStyles: {
+                        fontSize: fontSizeBody,
+                        lineWidth: 0.1,
+                        lineColor: [180, 180, 180],
+                        valign: 'middle',
+                        cellPadding: 1.5
+                    },
+                    alternateRowStyles: {
+                        fillColor: [248, 248, 248]
+                    },
+                    columnStyles: colStyles,
+                    margin: { left: margem, right: margem },
+                    tableWidth: larguraTotal,
+                    styles: {
+                        lineColor: [180, 180, 180],
+                        lineWidth: 0.1
+                    }
+                });
+
+                return doc.lastAutoTable.finalY + 5;
+            }
+
+            // SEÇÃO 1: PIX
+            if (pix.length > 0) {
+                const totalPix = pix.reduce((a, s) => a + s.valor, 0);
+                const dadosPix = pix.map(s => [
+                    s.vencimento,
+                    limparTexto(s.descricao.substring(0, 40)),
+                    formatarMoeda(s.valor),
+                    limparTexto(s.categoria.substring(0, 28)),
+                    s.centroCusto || 'Operações'
+                ]);
+                y = gerarTabela('PAGAMENTOS VIA PIX', dadosPix, ['Venc', 'Descrição', 'Valor', 'Categoria', 'Centro'], totalPix, y);
+            }
+
+            // SEÇÃO 2: BOLETO
+            if (boleto.length > 0) {
+                const totalBoleto = boleto.reduce((a, s) => a + s.valor, 0);
+                const dadosBoleto = boleto.map(s => [
+                    s.vencimento,
+                    limparTexto(s.descricao.substring(0, 40)),
+                    formatarMoeda(s.valor),
+                    limparTexto(s.categoria.substring(0, 28)),
+                    s.centroCusto || 'Operações'
+                ]);
+                y = gerarTabela('PAGAMENTOS EM BOLETO', dadosBoleto, ['Venc', 'Descrição', 'Valor', 'Categoria', 'Centro'], totalBoleto, y);
+            }
+
+            // SEÇÃO 3: OUTRAS
+            if (outras.length > 0) {
+                const totalOutras = outras.reduce((a, s) => a + s.valor, 0);
+                const dadosOutras = outras.map(s => [
+                    s.vencimento,
+                    limparTexto(s.descricao.substring(0, 32)),
+                    s.formaPagamento || 'Outra',
+                    formatarMoeda(s.valor),
+                    limparTexto(s.categoria.substring(0, 24)),
+                    s.centroCusto || 'Operações'
+                ]);
+                y = gerarTabela('OUTRAS FORMAS', dadosOutras, ['Venc', 'Descrição', 'Forma', 'Valor', 'Categoria', 'Centro'], totalOutras, y, { isOutras: true });
+            }
+
+            // SEÇÃO 4: RESUMO CENTRO
+            const totalGeral = pendentes.reduce((a, s) => a + s.valor, 0);
+            const centros = {};
+            pendentes.forEach(s => {
+                const c = s.centroCusto || 'Operações';
+                if (!centros[c]) centros[c] = { total: 0, qtd: 0 };
+                centros[c].total += s.valor;
+                centros[c].qtd += 1;
+            });
+
+            if (y > ph - 55) {
+                doc.addPage();
+                y = margem;
+            }
+
+            const dadosCentros = Object.entries(centros).map(([c, d]) => [
+                CENTRO_CUSTO_LABELS[c] || c,
+                formatarMoeda(d.total),
+                d.qtd + ' conta(s)'
+            ]);
+
+            y = gerarTabela('RESUMO POR CENTRO DE CUSTO', dadosCentros, ['Centro de Custo', 'Total', 'Quantidade'], totalGeral, y, { isResumo: true });
+
+            // LINHA SEPARADORA
+            if (y > ph - 30) {
+                doc.addPage();
+                y = margem;
+            }
+
+            doc.setDrawColor(180, 180, 180);
+            doc.setLineWidth(0.5);
+            doc.line(margem, y, pw - margem, y);
+            y += 7;
+
+            // TOTAL GERAL
+            doc.setFontSize(13);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(200, 0, 0);
+            doc.text('TOTAL GERAL: ' + formatarMoeda(totalGeral), margem, y);
+
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 100, 100);
+            doc.text(
+                pendentes.length + ' contas (' + pix.length + ' PIX, ' + boleto.length + ' Boleto, ' + outras.length + ' Outras)',
+                margem + 85, y
+            );
+
+            doc.setTextColor(40, 40, 40);
+            doc.text('Assinatura Diretora: ____________________', pw - margem - 65, y, { align: 'right' });
+
+            // RODAPÉ
+            doc.setFontSize(6);
+            doc.setTextColor(180, 180, 180);
+            doc.text('Gerado por Hong Decor em ' + dataStr, pw / 2, ph - 6, { align: 'center' });
+
+            doc.save('Hong_Decor_Contas_' + dataAtual() + '.pdf');
+            showToast('PDF gerado com sucesso!', 'success');
+        }
+
+        // ============================================================
+        // ===== GERAR EXCEL =====
+        // ============================================================
+
+        function gerarExcel() {
+            try {
+                const { custos, saidas } = getDados();
+                const hoje = new Date();
+                const dataStr = hoje.toLocaleDateString('pt-BR');
+
+                const saidasData = saidas.map(s => ({
+                    'Lançamento': s.dataLancamento || s.criadoEm?.split('T')[0] || '-',
+                    'Vencimento': s.vencimento,
+                    'Descrição': s.descricao,
+                    'Valor': s.valor,
+                    'Forma Pagamento': s.formaPagamento || 'PIX',
+                    'Categoria': s.categoria,
+                    'Centro de Custo': s.centroCusto || 'Operações',
+                    'Status': s.status === 'pago' ? 'Pago' : (diasAte(s.vencimento) < 0 ? 'Vencido' : 'Pendente'),
+                    'Data Pagamento': s.dataPagamento || '-',
+                    'Parcelas': s.parcelas > 1 ? s.parcelaAtual + '/' + s.parcelas : 'À vista',
+                    'Observações': s.observacoes || '-'
+                }));
+
+                const custosData = custos.map(c => ({
+                    'Tipo': c.tipo,
+                    'Valor': c.valor,
+                    'Dia Vencimento': c.dia,
+                    'Categoria': c.categoria,
+                    'Centro de Custo': c.centroCusto || 'Operações',
+                    'Status': c.status === 'ativo' ? 'Ativo' : 'Inativo'
+                }));
+
+                const totalPago = saidas.filter(s => s.status === 'pago').reduce((a, s) => a + s.valor, 0);
+                const totalPendente = saidas.filter(s => s.status !== 'pago').reduce((a, s) => a + s.valor, 0);
+                const totalVencido = saidas.filter(s => s.status !== 'pago' && diasAte(s.vencimento) < 0).reduce((a, s) => a + s.valor, 0);
+
+                const resumoData = [
+                    { 'Indicador': 'Total de Contas', 'Valor': saidas.length },
+                    { 'Indicador': 'Contas Pagas', 'Valor': saidas.filter(s => s.status === 'pago').length },
+                    { 'Indicador': 'Contas Pendentes', 'Valor': saidas.filter(s => s.status !== 'pago').length },
+                    { 'Indicador': 'Contas Vencidas', 'Valor': saidas.filter(s => s.status !== 'pago' && diasAte(s.vencimento) < 0).length },
+                    { 'Indicador': 'Total Pago (R$)', 'Valor': totalPago },
+                    { 'Indicador': 'Total Pendente (R$)', 'Valor': totalPendente },
+                    { 'Indicador': 'Total Vencido (R$)', 'Valor': totalVencido },
+                    { 'Indicador': 'Custos Fixos (R$)', 'Valor': custos.filter(c => c.status === 'ativo').reduce((a, c) => a + c.valor, 0) },
+                    { 'Indicador': 'Data Emissão', 'Valor': dataStr }
+                ];
+
+                const wb = XLSX.utils.book_new();
+
+                const ws1 = XLSX.utils.json_to_sheet(saidasData);
+                XLSX.utils.book_append_sheet(wb, ws1, 'Saídas');
+
+                const ws2 = XLSX.utils.json_to_sheet(custosData);
+                XLSX.utils.book_append_sheet(wb, ws2, 'Custos Fixos');
+
+                const ws3 = XLSX.utils.json_to_sheet(resumoData);
+                XLSX.utils.book_append_sheet(wb, ws3, 'Resumo');
+
+                function autoWidth(ws, data) {
+                    const colWidths = {};
+                    data.forEach(row => {
+                        Object.keys(row).forEach(key => {
+                            const val = String(row[key] || '');
+                            const len = Math.max(key.length, val.length);
+                            colWidths[key] = Math.max(colWidths[key] || 10, Math.min(len + 2, 50));
+                        });
+                    });
+                    ws['!cols'] = Object.keys(data[0] || {}).map(key => ({ wch: colWidths[key] || 15 }));
+                }
+
+                autoWidth(ws1, saidasData);
+                autoWidth(ws2, custosData);
+                autoWidth(ws3, resumoData);
+
+                const nomeArquivo = `Hong_Decor_${dataAtual()}.xlsx`;
+                XLSX.writeFile(wb, nomeArquivo);
+                showToast('Excel gerado com sucesso!', 'success');
+
+            } catch (err) {
+                console.error('Erro ao gerar Excel:', err);
+                showToast('Erro ao gerar Excel: ' + err.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // ===== ATALHOS DE TECLADO =====
+        // ============================================================
+
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+N = Nova Saída
+            if (e.ctrlKey && e.key === 'n') {
+                e.preventDefault();
+                abrirModalSaida();
+            }
+            // Escape = Fechar modais
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
+            }
+        });
+
+        // ============================================================
+        // ===== INICIALIZAÇÃO =====
+        // ============================================================
+
+        function inicializar() {
+            const { custos, saidas } = getDados();
+            
+            // Verificar conexão com Firebase
+            verificarConexaoFirebase();
+
+            if (custos.length === 0 && saidas.length === 0) {
+                const exemplosCustos = [
+                    { id: 'c1', tipo: 'Aluguel', valor: 4500, dia: 5, categoria: 'Infraestrutura e Showroom', centroCusto: 'ShowRoom', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c2', tipo: 'Condomínio', valor: 850, dia: 8, categoria: 'Infraestrutura e Showroom', centroCusto: 'ShowRoom', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c3', tipo: 'IPTU', valor: 320, dia: 15, categoria: 'Infraestrutura e Showroom', centroCusto: 'ShowRoom', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c4', tipo: 'Segurança', valor: 450, dia: 10, categoria: 'Infraestrutura e Showroom', centroCusto: 'Operações', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c5', tipo: 'Seguro Estoque', valor: 680, dia: 20, categoria: 'Infraestrutura e Showroom', centroCusto: 'Operações', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c6', tipo: 'Salários Base', valor: 12000, dia: 5, categoria: 'Pessoal e Vendas', centroCusto: 'Administrativo', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c7', tipo: 'Encargos Sociais', valor: 3500, dia: 20, categoria: 'Pessoal e Vendas', centroCusto: 'Administrativo', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c8', tipo: 'Pró-labore', valor: 6000, dia: 28, categoria: 'Pessoal e Vendas', centroCusto: 'Diretoria', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c9', tipo: 'Internet', valor: 350, dia: 12, categoria: 'Tecnologia', centroCusto: 'Operações', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c10', tipo: 'Telefone', valor: 180, dia: 15, categoria: 'Tecnologia', centroCusto: 'Operações', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c11', tipo: 'ERP', valor: 1200, dia: 25, categoria: 'Tecnologia', centroCusto: 'Administrativo', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c12', tipo: 'Contador', valor: 1500, dia: 18, categoria: 'Serviços Profissionais', centroCusto: 'Administrativo', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c13', tipo: 'Marketing', valor: 2500, dia: 22, categoria: 'Serviços Profissionais', centroCusto: 'Comercial', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c14', tipo: 'IPVA', valor: 320, dia: 30, categoria: 'Logística e Instalação', centroCusto: 'Operações', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c15', tipo: 'Seguro Veículo', valor: 280, dia: 20, categoria: 'Logística e Instalação', centroCusto: 'Operações', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c16', tipo: 'Manutenção Veículo', valor: 400, dia: 10, categoria: 'Logística e Instalação', centroCusto: 'Operações', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c17', tipo: 'Mostruários', valor: 350, dia: 15, categoria: 'Logística e Instalação', centroCusto: 'Comercial', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c18', tipo: 'Limpeza', valor: 600, dia: 3, categoria: 'Manutenção do Espaço', centroCusto: 'ShowRoom', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c19', tipo: 'Ar-condicionado', valor: 250, dia: 10, categoria: 'Manutenção do Espaço', centroCusto: 'Operações', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c20', tipo: 'Cesta de Serviços', valor: 420, dia: 5, categoria: 'Custos Financeiros', centroCusto: 'Administrativo', status: 'ativo', criadoEm: new Date().toISOString() },
+                    { id: 'c21', tipo: 'Maquininhas', valor: 380, dia: 8, categoria: 'Custos Financeiros', centroCusto: 'Comercial', status: 'ativo', criadoEm: new Date().toISOString() }
+                ];
+
+                const exemplosSaidas = [];
+                const hoje = new Date();
+                const hojeStr = dataAtual();
+
+                for (let i = 0; i < 30; i++) {
+                    const mesOffset = Math.floor(Math.random() * 3);
+                    const mb = new Date(hoje);
+                    mb.setMonth(mb.getMonth() - mesOffset);
+                    const mes = mb.getMonth() + 1;
+                    const ano = mb.getFullYear();
+                    const ms = String(mes).padStart(2, '0');
+
+                    const diaL = String(Math.floor(Math.random() * 15) + 1).padStart(2, '0');
+                    const diaV = String(Math.min(parseInt(diaL) + Math.floor(Math.random() * 10) + 3, 28)).padStart(2, '0');
+
+                    const descs = ['Fornecedor Tapetes', 'Serviço Instalação', 'Material Escritório', 'Manutenção', 'Frete', 'Consultoria', 'Equipamento', 'Peças', 'Treinamento', 'Evento'];
+                    const cats = ['Infraestrutura e Showroom', 'Pessoal e Vendas', 'Tecnologia', 'Serviços Profissionais', 'Logística e Instalação', 'Manutenção do Espaço', 'Custos Financeiros', 'Outros'];
+                    const centros = ['ShowRoom', 'Comercial', 'Administrativo', 'Diretoria', 'Operações'];
+                    const formas = ['PIX', 'Boleto', 'Cartão de Crédito', 'Transferência', 'Dinheiro'];
+                    const statusList = ['pendente', 'pendente', 'pendente', 'pago', 'pago'];
+
+                    const st = statusList[Math.floor(Math.random() * statusList.length)];
+                    const val = Math.round((Math.random() * 1500 + 100) * 100) / 100;
+                    const dp = st === 'pago' ? `${ano}-${ms}-${String(Math.floor(Math.random() * 10) + 15).padStart(2, '0')}` : null;
+                    const parcelas = Math.random() > 0.7 ? Math.floor(Math.random() * 6) + 2 : 1;
+                    const parcelaAtual = parcelas > 1 ? Math.floor(Math.random() * parcelas) + 1 : 1;
+
+                    exemplosSaidas.push({
+                        id: 's' + Date.now() + i,
+                        descricao: descs[Math.floor(Math.random() * descs.length)] + ' - NF ' + Math.floor(Math.random() * 999),
+                        dataLancamento: `${ano}-${ms}-${diaL}`,
+                        vencimento: `${ano}-${ms}-${diaV}`,
+                        valor: val,
+                        valorParcela: val / parcelas,
+                        formaPagamento: formas[Math.floor(Math.random() * formas.length)],
+                        categoria: cats[Math.floor(Math.random() * cats.length)],
+                        centroCusto: centros[Math.floor(Math.random() * centros.length)],
+                        status: st,
+                        dataPagamento: dp,
+                        observacoes: ['Sem obs', 'Urgente', 'Aguardando aprovação', 'Contrato vigente', null][Math.floor(Math.random() * 5)],
+                        parcelas: parcelas,
+                        parcelaAtual: parcelaAtual,
+                        criadoEm: new Date().toISOString()
+                    });
+                }
+
+                const mesAtual = String(hoje.getMonth() + 1).padStart(2, '0');
+                const anoAtual = hoje.getFullYear();
+
+                exemplosSaidas.push({
+                    id: 's_hoje',
+                    descricao: 'ALERTA - Fornecedor Urgente',
+                    dataLancamento: hojeStr,
+                    vencimento: hojeStr,
+                    valor: 1500.00,
+                    valorParcela: 1500.00,
+                    formaPagamento: 'PIX',
+                    categoria: 'Infraestrutura e Showroom',
+                    centroCusto: 'Operações',
+                    status: 'pendente',
+                    dataPagamento: null,
+                    observacoes: 'Vence hoje! Pagamento urgente.',
+                    parcelas: 1,
+                    parcelaAtual: 1,
+                    criadoEm: new Date().toISOString()
+                });
+
+                const mp = new Date(hoje);
+                mp.setMonth(mp.getMonth() - 1);
+                const mpStr = String(mp.getMonth() + 1).padStart(2, '0');
+                const ap = mp.getFullYear();
+
+                exemplosSaidas.push({
+                    id: 's_vencida1',
+                    descricao: 'VENCIDA - Taxa de Manutenção',
+                    dataLancamento: `${ap}-${mpStr}-05`,
+                    vencimento: `${ap}-${mpStr}-10`,
+                    valor: 850.00,
+                    valorParcela: 850.00,
+                    formaPagamento: 'Boleto',
+                    categoria: 'Manutenção do Espaço',
+                    centroCusto: 'ShowRoom',
+                    status: 'pendente',
+                    dataPagamento: null,
+                    observacoes: 'Vencida há mais de 15 dias.',
+                    parcelas: 1,
+                    parcelaAtual: 1,
+                    criadoEm: new Date().toISOString()
+                });
+
+                exemplosSaidas.push({
+                    id: 's_vencida2',
+                    descricao: 'VENCIDA - Consultoria',
+                    dataLancamento: `${ap}-${mpStr}-01`,
+                    vencimento: `${ap}-${mpStr}-05`,
+                    valor: 2200.00,
+                    valorParcela: 2200.00,
+                    formaPagamento: 'Transferência',
+                    categoria: 'Serviços Profissionais',
+                    centroCusto: 'Administrativo',
+                    status: 'pendente',
+                    dataPagamento: null,
+                    observacoes: 'Atraso no pagamento.',
+                    parcelas: 1,
+                    parcelaAtual: 1,
+                    criadoEm: new Date().toISOString()
+                });
+
+                // Exemplo de conta parcelada
+                exemplosSaidas.push({
+                    id: 's_parcelada',
+                    descricao: 'PARCELADO - Equipamento',
+                    dataLancamento: hojeStr,
+                    vencimento: new Date(hoje.getTime() + 30 * 86400000).toISOString().split('T')[0],
+                    valor: 3000.00,
+                    valorParcela: 500.00,
+                    formaPagamento: 'Cartão de Crédito',
+                    categoria: 'Infraestrutura e Showroom',
+                    centroCusto: 'ShowRoom',
+                    status: 'pendente',
+                    dataPagamento: null,
+                    observacoes: '6 parcelas de R$ 500,00',
+                    parcelas: 6,
+                    parcelaAtual: 1,
+                    criadoEm: new Date().toISOString()
+                });
+
+                exemplosSaidas.push({
+                    id: 's_paga',
+                    descricao: 'PAGO - Ar Condicionado',
+                    dataLancamento: new Date(hoje.getTime() - 10 * 86400000).toISOString().split('T')[0],
+                    vencimento: new Date(hoje.getTime() - 5 * 86400000).toISOString().split('T')[0],
+                    valor: 450.00,
+                    valorParcela: 450.00,
+                    formaPagamento: 'PIX',
+                    categoria: 'Manutenção do Espaço',
+                    centroCusto: 'Operações',
+                    status: 'pago',
+                    dataPagamento: new Date(hoje.getTime() - 3 * 86400000).toISOString().split('T')[0],
+                    observacoes: 'Pagamento realizado.',
+                    parcelas: 1,
+                    parcelaAtual: 1,
+                    criadoEm: new Date().toISOString()
+                });
+
+                salvarDados(exemplosCustos, exemplosSaidas);
+                showToast('Dados de exemplo carregados!', 'info');
+            }
+
+            renderizarTudo();
+            renderizarComparativo();
+        }
+
+        document.addEventListener('DOMContentLoaded', inicializar);
+
+        console.log('Hong Decor - Contas a Pagar - Versão Final com Firebase');
+        console.log('✅ PDF em modo paisagem ocupando 95% da página');
+        console.log('✅ Excel com 3 abas (Saídas, Custos Fixos, Resumo)');
+        console.log('✅ Seleção em lote para excluir');
+        console.log('✅ Duplicar saída');
+        console.log('✅ Parcelamento de contas');
+        console.log('✅ Firebase para sincronização em nuvem');
+        console.log('✅ Atalho Ctrl+N para nova saída');
+    </script>
+</body>
+</html>
